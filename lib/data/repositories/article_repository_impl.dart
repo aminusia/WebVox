@@ -1,0 +1,91 @@
+import 'package:uuid/uuid.dart';
+import 'package:web_reader/core/constants/app_constants.dart';
+import 'package:web_reader/data/sources/local/local_article_source.dart';
+import 'package:web_reader/data/sources/remote/remote_article_source.dart';
+import 'package:web_reader/domain/entities/article.dart';
+import 'package:web_reader/domain/repositories/article_repository.dart';
+
+class ArticleRepositoryImpl implements ArticleRepository {
+  final LocalArticleSource _local;
+  final RemoteArticleSource _remote;
+  final Uuid _uuid;
+
+  ArticleRepositoryImpl({
+    LocalArticleSource? local,
+    RemoteArticleSource? remote,
+  }) : _local = local ?? LocalArticleSource(),
+       _remote = remote ?? RemoteArticleSource(),
+       _uuid = const Uuid();
+
+  @override
+  Future<Article> fetchArticle(String url) async {
+    final cached = await _local.findByUrl(url);
+    if (cached != null) {
+      // Update createdAt so re-accessed articles bubble up in the recent list.
+      final refreshed = Article(
+        id: cached.id,
+        url: cached.url,
+        title: cached.title,
+        content: cached.content,
+        author: cached.author,
+        language: cached.language,
+        estimatedReadTime: cached.estimatedReadTime,
+        isBookmarked: cached.isBookmarked,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        prevUrl: cached.prevUrl,
+        nextUrl: cached.nextUrl,
+        homeUrl: cached.homeUrl,
+      );
+      await _local.insertOrUpdate(refreshed);
+      return refreshed;
+    }
+
+    final parsed = await _remote.fetch(url);
+
+    final article = Article(
+      id: _uuid.v4(),
+      url: url,
+      title: parsed.title,
+      content: parsed.content,
+      author: parsed.author,
+      language: parsed.language,
+      estimatedReadTime: parsed.estimatedReadTime,
+      isBookmarked: false,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+      prevUrl: parsed.prevUrl,
+      nextUrl: parsed.nextUrl,
+      homeUrl: parsed.homeUrl,
+    );
+
+    await _local.insertOrUpdate(article);
+    await pruneOldArticles();
+    return article;
+  }
+
+  @override
+  Future<List<Article>> getRecentArticles() => _local.getRecent();
+
+  @override
+  Future<List<Article>> getBookmarks() => _local.getBookmarks();
+
+  @override
+  Future<Article?> getCachedArticle(String url) => _local.findByUrl(url);
+
+  @override
+  Future<void> toggleBookmark(String articleId) async {
+    final article = await _local.findById(articleId);
+    if (article == null) return;
+    await _local.updateBookmark(articleId, isBookmarked: !article.isBookmarked);
+  }
+
+  @override
+  Future<void> deleteArticle(String articleId) => _local.delete(articleId);
+
+  @override
+  Future<void> pruneOldArticles() async {
+    final count = await _local.count();
+    if (count > AppConstants.maxCachedArticles) {
+      await _local.pruneOldest(AppConstants.maxCachedArticles);
+    }
+  }
+}
