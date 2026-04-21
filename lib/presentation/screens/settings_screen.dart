@@ -157,6 +157,19 @@ class _SettingsForm extends ConsumerWidget {
         Text('Reading', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
 
+        // Auto-read
+        SwitchListTile(
+          title: const Text('Auto-read on open'),
+          subtitle: const Text(
+            'Automatically start reading aloud when a page is opened',
+          ),
+          value: settings.autoRead,
+          onChanged: (val) {
+            notifier.update(settings.copyWith(autoRead: val));
+          },
+        ),
+        const SizedBox(height: 8),
+
         // Auto-next
         SwitchListTile(
           title: const Text('Auto-next page'),

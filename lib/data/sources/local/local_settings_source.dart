@@ -24,6 +24,9 @@ class LocalSettingsSource {
       autoNext:
           prefs.getBool(AppConstants.prefAutoNext) ??
           AppConstants.defaultAutoNext,
+      autoRead:
+          prefs.getBool(AppConstants.prefAutoRead) ??
+          AppConstants.defaultAutoRead,
       themePreference: ThemePreference.values.firstWhere(
         (pref) => pref.name == themeModeValue,
         orElse: () => ThemePreference.system,
@@ -38,6 +41,7 @@ class LocalSettingsSource {
     await prefs.setDouble(AppConstants.prefTtsSpeed, settings.ttsSpeed);
     await prefs.setDouble(AppConstants.prefFontSize, settings.fontSize);
     await prefs.setBool(AppConstants.prefAutoNext, settings.autoNext);
+    await prefs.setBool(AppConstants.prefAutoRead, settings.autoRead);
     await prefs.setString(
       AppConstants.prefThemeMode,
       settings.themePreference.name,

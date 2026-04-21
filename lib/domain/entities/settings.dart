@@ -5,6 +5,7 @@ class Settings {
   final double ttsSpeed;
   final double fontSize;
   final bool autoNext;
+  final bool autoRead;
   final ThemePreference themePreference;
 
   /// Empty string means use the system default voice.
@@ -15,6 +16,7 @@ class Settings {
     required this.ttsSpeed,
     required this.fontSize,
     this.autoNext = true,
+    this.autoRead = true,
     this.themePreference = ThemePreference.system,
     this.ttsVoice = '',
   });
@@ -24,6 +26,7 @@ class Settings {
     double? ttsSpeed,
     double? fontSize,
     bool? autoNext,
+    bool? autoRead,
     ThemePreference? themePreference,
     String? ttsVoice,
   }) => Settings(
@@ -31,6 +34,7 @@ class Settings {
     ttsSpeed: ttsSpeed ?? this.ttsSpeed,
     fontSize: fontSize ?? this.fontSize,
     autoNext: autoNext ?? this.autoNext,
+    autoRead: autoRead ?? this.autoRead,
     themePreference: themePreference ?? this.themePreference,
     ttsVoice: ttsVoice ?? this.ttsVoice,
   );

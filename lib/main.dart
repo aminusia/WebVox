@@ -149,9 +149,7 @@ class _ShareIntentWrapperState extends ConsumerState<_ShareIntentWrapper> {
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
       ref.read(recentArticlesProvider.notifier).load();
       _navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (_) => ReaderScreen(article: article, autoPlay: true),
-        ),
+        MaterialPageRoute(builder: (_) => ReaderScreen(article: article)),
       );
     } catch (_) {}
   }

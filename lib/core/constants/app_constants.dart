@@ -7,6 +7,7 @@ class AppConstants {
   static const String prefFontSize = 'font_size';
   static const String prefLastArticleUrl = 'last_article_url';
   static const String prefAutoNext = 'auto_next';
+  static const String prefAutoRead = 'auto_read';
   static const String prefTtsVoice = 'tts_voice';
   static const String prefThemeMode = 'theme_mode';
 
@@ -14,6 +15,7 @@ class AppConstants {
   static const double defaultTtsSpeed = 0.5;
   static const double defaultFontSize = 18.0;
   static const bool defaultAutoNext = true;
+  static const bool defaultAutoRead = true;
   static const String defaultThemeMode = 'system';
 
   static const int maxCachedArticles = 50;

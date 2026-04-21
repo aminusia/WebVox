@@ -36,37 +36,9 @@ class ArticleContentWidget extends StatefulWidget {
   State<ArticleContentWidget> createState() => _ArticleContentWidgetState();
 }
 
-class _ArticleContentWidgetState extends State<ArticleContentWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _fadeController;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-  }
-
-  @override
-  void didUpdateWidget(ArticleContentWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // When highlight changes, trigger fade animation
-    if (oldWidget.highlightedIndex != widget.highlightedIndex) {
-      _fadeController.forward(from: 0.0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _fadeController.dispose();
-    super.dispose();
-  }
-
+class _ArticleContentWidgetState extends State<ArticleContentWidget> {
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Column(
@@ -80,12 +52,12 @@ class _ArticleContentWidgetState extends State<ArticleContentWidget>
         final headingStyle = tt.titleMedium?.copyWith(
           fontSize: widget.fontSize + 2,
           fontWeight: FontWeight.bold,
-          color: cs.onSurface,
+          color: isHighlighted ? Colors.blue : null,
         );
         final bodyStyle = tt.bodyLarge?.copyWith(
           fontSize: widget.fontSize,
           height: 1.7,
-          color: cs.onSurface,
+          color: isHighlighted ? Colors.blue : null,
         );
 
         // Build the text content (with optional word highlight)
@@ -97,6 +69,7 @@ class _ArticleContentWidgetState extends State<ArticleContentWidget>
             widget.wordEnd <= displayText.length) {
           final safeStart = widget.wordStart.clamp(0, displayText.length);
           final safeEnd = widget.wordEnd.clamp(safeStart, displayText.length);
+          const activeWordColor = Color(0xFFB8860B); // dark golden yellow
           textWidget = Text.rich(
             TextSpan(
               style: bodyStyle,
@@ -105,8 +78,9 @@ class _ArticleContentWidgetState extends State<ArticleContentWidget>
                 TextSpan(
                   text: displayText.substring(safeStart, safeEnd),
                   style: bodyStyle?.copyWith(
-                    backgroundColor: cs.primaryContainer,
-                    color: cs.onPrimaryContainer,
+                    color: activeWordColor,
+                    decoration: TextDecoration.underline,
+                    decorationColor: activeWordColor,
                   ),
                 ),
                 TextSpan(text: displayText.substring(safeEnd)),
@@ -120,7 +94,6 @@ class _ArticleContentWidgetState extends State<ArticleContentWidget>
           );
         }
 
-        // Wrap with AnimatedOpacity for fade effect
         Widget containerChild = LayoutBuilder(
           builder:
               (ctx, constraints) => GestureDetector(
@@ -146,22 +119,6 @@ class _ArticleContentWidgetState extends State<ArticleContentWidget>
                 child: textWidget,
               ),
         );
-
-        // Animate highlight appearance/disappearance
-        if (isHighlighted) {
-          containerChild = AnimatedOpacity(
-            opacity: 1.0,
-            duration: const Duration(milliseconds: 200),
-            child: Container(
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: containerChild,
-            ),
-          );
-        }
 
         return Padding(
           key: widget.paragraphKeys?[i],

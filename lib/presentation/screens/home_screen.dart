@@ -58,11 +58,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         duration: Duration(seconds: 2),
       ),
     );
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ReaderScreen(article: cached, autoPlay: false),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ReaderScreen(article: cached)));
     ref.read(recentArticlesProvider.notifier).load();
     ref.read(bookmarksProvider.notifier).load();
   }

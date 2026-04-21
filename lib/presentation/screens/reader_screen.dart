@@ -15,13 +15,7 @@ import 'package:web_reader/presentation/widgets/tts_control_bar.dart';
 class ReaderScreen extends ConsumerStatefulWidget {
   final Article article;
 
-  /// Controls auto-play behaviour:
-  /// - `true`  → always start TTS immediately after loading
-  /// - `false` → never auto-play (just restore scroll/highlight position)
-  /// - `null`  → legacy behaviour: auto-play only when there is no saved state
-  final bool? autoPlay;
-
-  const ReaderScreen({super.key, required this.article, this.autoPlay});
+  const ReaderScreen({super.key, required this.article});
 
   @override
   ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
@@ -75,7 +69,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   Future<void> _restorePosition() async {
     final readingStateRepo = _readingStateRepo;
     final saved = await readingStateRepo.getReadingState(article.id);
-    if (saved != null && mounted) {
+    if (!mounted) return;
+    if (saved != null) {
       setState(() {
         _highlightedIndex = saved.lastReadIndex;
         _savedWordOffset = saved.lastWordOffset;
@@ -85,35 +80,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           final max = _scroll.position.maxScrollExtent;
           _scroll.jumpTo(saved.scrollPosition * max);
         }
-        // Only auto-play if explicitly requested.
-        if (widget.autoPlay == true && !_autoPlayScheduled && mounted) {
-          _autoPlayScheduled = true;
-          ref
-              .read(ttsProvider.notifier)
-              .play(
-                article.paragraphs,
-                startIndex: saved.lastReadIndex,
-                wordOffset: saved.lastWordOffset,
-                language: article.language,
-                articleTitle: article.title,
-              );
-        }
+        _maybeAutoPlay(startIndex: saved.lastReadIndex);
       });
     } else {
-      // No saved reading state.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Auto-play when explicitly requested OR using legacy behaviour (null).
-        if (widget.autoPlay != false && !_autoPlayScheduled && mounted) {
-          _autoPlayScheduled = true;
-          ref
-              .read(ttsProvider.notifier)
-              .play(
-                article.paragraphs,
-                language: article.language,
-                articleTitle: article.title,
-              );
-        }
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoPlay());
+    }
+  }
+
+  void _maybeAutoPlay({int startIndex = 0}) {
+    if (!mounted || _autoPlayScheduled) return;
+    final autoRead = ref.read(settingsProvider).valueOrNull?.autoRead ?? true;
+    if (autoRead) {
+      _autoPlayScheduled = true;
+      ref
+          .read(ttsProvider.notifier)
+          .play(
+            article.paragraphs,
+            startIndex: startIndex,
+            language: article.language,
+            articleTitle: article.title,
+          );
     }
   }
 
@@ -508,9 +494,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
 
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => ReaderScreen(article: newArticle, autoPlay: true),
-      ),
+      MaterialPageRoute(builder: (_) => ReaderScreen(article: newArticle)),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -809,7 +793,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                               'Next ($_autoNextCountdown)',
                                             ),
                                           ),
-                                          const SizedBox(width: 2),
+                                          const SizedBox(width: 8),
                                           FilledButton.icon(
                                             onPressed:
                                                 _isLoading
