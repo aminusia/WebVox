@@ -23,6 +23,7 @@ dependencies:
   shared_preferences: ^2.3.0
   audio_service: ^0.18.18
   rxdart: ^0.28.0
+  package_info_plus: ^8.3.0
 
 dev_dependencies:
   flutter_test:
@@ -75,10 +76,10 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/appicon.png"
+  image_path: "assets/appicon2.png"
   # Adaptive icons (Android 8+ / API 26+): prevents blurry scaled legacy PNG.
   # The foreground is your icon; background is a solid color behind it.
   # The foreground will be scaled to fill 108×108dp with a 72dp safe zone —
   # if your icon has important content at the edges, add padding to appicon.png.
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/appicon.png"
+  adaptive_icon_foreground: "assets/appicon2.png"

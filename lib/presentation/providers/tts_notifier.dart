@@ -296,6 +296,44 @@ class TtsAudioHandler extends BaseAudioHandler {
     await _speakCurrent();
   }
 
+  /// Replaces the playback queue without interrupting the current utterance.
+  /// New content starts after the current paragraph finishes naturally.
+  /// Use for seamless background navigation (avoids re-acquiring audio focus).
+  Future<void> transitionToContent({
+    required List<String> paragraphs,
+    String? language,
+    String? articleTitle,
+  }) async {
+    _paragraphs = paragraphs;
+    _currentIndex = -1; // completion handler increments to 0
+    _startOffset = 0;
+
+    if (language != null && language != _language) {
+      _language = language;
+      await _tts.setLanguage(language);
+    }
+
+    if (articleTitle != null) {
+      mediaItem.add(
+        MediaItem(
+          id: '0',
+          title: articleTitle,
+          artist: 'WebReader',
+          duration: Duration(seconds: paragraphs.length),
+        ),
+      );
+    }
+
+    _emit(
+      _ttsState.copyWith(
+        currentIndex: 0,
+        total: paragraphs.length,
+        wordStart: -1,
+        wordEnd: -1,
+      ),
+    );
+  }
+
   @override
   Future<void> setSpeed(double speed) async {
     _speed = speed;
@@ -479,6 +517,17 @@ class TtsNotifier extends StateNotifier<TtsState> {
     paragraphs: paragraphs,
     startIndex: startIndex,
     wordOffset: wordOffset,
+    language: language,
+    articleTitle: articleTitle,
+  );
+
+  /// Replaces the queue without stopping playback — see [TtsAudioHandler.transitionToContent].
+  Future<void> transitionToContent(
+    List<String> paragraphs, {
+    String? language,
+    String? articleTitle,
+  }) => _handler.transitionToContent(
+    paragraphs: paragraphs,
     language: language,
     articleTitle: articleTitle,
   );

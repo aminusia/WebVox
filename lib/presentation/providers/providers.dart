@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:web_reader/core/services/article_cache_service.dart';
 import 'package:web_reader/data/repositories/article_repository_impl.dart';
 import 'package:web_reader/data/repositories/reading_state_repository_impl.dart';
 import 'package:web_reader/data/repositories/settings_repository_impl.dart';
@@ -15,6 +18,45 @@ final articleRepositoryProvider = Provider<ArticleRepository>((ref) {
   return ArticleRepositoryImpl();
 });
 
+final articleCacheServiceProvider = Provider<ArticleCacheService>((ref) {
+  final service = ArticleCacheService(ref.read(articleRepositoryProvider));
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+// ─── Cache Log ───────────────────────────────────────────────────────────────
+
+final cacheLogProvider = StateNotifierProvider<CacheLogNotifier, List<String>>((
+  ref,
+) {
+  final service = ref.watch(articleCacheServiceProvider);
+  return CacheLogNotifier(service.logStream);
+});
+
+class CacheLogNotifier extends StateNotifier<List<String>> {
+  static const _maxLines = 200;
+
+  late final StreamSubscription<String> _sub;
+
+  CacheLogNotifier(Stream<String> logStream) : super([]) {
+    _sub = logStream.listen((line) {
+      final next = [...state, line];
+      state =
+          next.length > _maxLines
+              ? next.sublist(next.length - _maxLines)
+              : next;
+    });
+  }
+
+  void clear() => state = [];
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+}
+
 final readingStateRepositoryProvider = Provider<ReadingStateRepository>((ref) {
   return ReadingStateRepositoryImpl();
 });
@@ -22,6 +64,28 @@ final readingStateRepositoryProvider = Provider<ReadingStateRepository>((ref) {
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return SettingsRepositoryImpl();
 });
+
+// ─── Cached Articles ─────────────────────────────────────────────────────────
+
+final cachedArticlesProvider =
+    StateNotifierProvider<CachedArticlesNotifier, AsyncValue<List<Article>>>((
+      ref,
+    ) {
+      return CachedArticlesNotifier(ref.read(articleRepositoryProvider));
+    });
+
+class CachedArticlesNotifier extends StateNotifier<AsyncValue<List<Article>>> {
+  final ArticleRepository _repo;
+
+  CachedArticlesNotifier(this._repo) : super(const AsyncLoading()) {
+    load();
+  }
+
+  Future<void> load() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _repo.getAllCached());
+  }
+}
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 

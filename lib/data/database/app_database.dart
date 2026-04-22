@@ -41,6 +41,68 @@ class AppDatabase {
       await db.execute('ALTER TABLE articles ADD COLUMN next_url TEXT');
       await db.execute('ALTER TABLE articles ADD COLUMN home_url TEXT');
     }
+    if (oldVersion < 4) {
+      // DEFAULT 1 so all pre-existing articles remain visible in recents.
+      await db.execute(
+        'ALTER TABLE articles ADD COLUMN is_user_read INTEGER NOT NULL DEFAULT 1',
+      );
+    }
+    if (oldVersion < 5) {
+      // Create dedicated bookmarks and read_history tables.
+      await db.execute('''
+        CREATE TABLE bookmarks (
+          article_id TEXT PRIMARY KEY,
+          bookmarked_at INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE read_history (
+          article_id TEXT PRIMARY KEY,
+          read_at INTEGER NOT NULL
+        )
+      ''');
+      // Migrate existing flags into the new tables.
+      await db.rawInsert('''
+        INSERT OR IGNORE INTO bookmarks (article_id, bookmarked_at)
+        SELECT id, created_at FROM articles WHERE is_bookmarked = 1
+      ''');
+      await db.rawInsert('''
+        INSERT OR IGNORE INTO read_history (article_id, read_at)
+        SELECT id, created_at FROM articles WHERE is_user_read = 1
+      ''');
+      // Rebuild articles table without the now-redundant flag columns.
+      await db.execute('''
+        CREATE TABLE articles_new (
+          id TEXT PRIMARY KEY,
+          url TEXT NOT NULL UNIQUE,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          author TEXT,
+          language TEXT NOT NULL DEFAULT 'en-US',
+          estimated_read_time INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          prev_url TEXT,
+          next_url TEXT,
+          home_url TEXT
+        )
+      ''');
+      await db.rawInsert('''
+        INSERT INTO articles_new
+          (id, url, title, content, author, language,
+           estimated_read_time, created_at, prev_url, next_url, home_url)
+        SELECT
+          id, url, title, content, author, language,
+          estimated_read_time, created_at, prev_url, next_url, home_url
+        FROM articles
+      ''');
+      await db.execute('DROP TABLE articles');
+      await db.execute('ALTER TABLE articles_new RENAME TO articles');
+    }
+    if (oldVersion < 6) {
+      await db.execute(
+        'ALTER TABLE read_history ADD COLUMN is_completed INTEGER NOT NULL DEFAULT 0',
+      );
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -53,7 +115,6 @@ class AppDatabase {
         author TEXT,
         language TEXT NOT NULL DEFAULT 'en-US',
         estimated_read_time INTEGER NOT NULL DEFAULT 0,
-        is_bookmarked INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         prev_url TEXT,
         next_url TEXT,
@@ -67,6 +128,21 @@ class AppDatabase {
         scroll_position REAL NOT NULL DEFAULT 0.0,
         last_read_index INTEGER NOT NULL DEFAULT 0,
         last_word_offset INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE bookmarks (
+        article_id TEXT PRIMARY KEY,
+        bookmarked_at INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE read_history (
+        article_id TEXT PRIMARY KEY,
+        read_at INTEGER NOT NULL,
+        is_completed INTEGER NOT NULL DEFAULT 0
       )
     ''');
   }

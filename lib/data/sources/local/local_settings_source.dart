@@ -32,6 +32,34 @@ class LocalSettingsSource {
         orElse: () => ThemePreference.system,
       ),
       ttsVoice: prefs.getString(AppConstants.prefTtsVoice) ?? '',
+      paragraphHighlightColor:
+          prefs.getInt(AppConstants.prefParagraphHighlightColor) ??
+          AppConstants.defaultParagraphHighlightColor,
+      paragraphHighlightBackground:
+          prefs.containsKey(AppConstants.prefParagraphHighlightBackground)
+              ? prefs.getInt(AppConstants.prefParagraphHighlightBackground)
+              : null,
+      paragraphHighlightDecoration: HighlightDecoration.values.firstWhere(
+        (d) =>
+            d.name ==
+            (prefs.getString(AppConstants.prefParagraphHighlightDecoration) ??
+                AppConstants.defaultParagraphHighlightDecoration),
+        orElse: () => HighlightDecoration.none,
+      ),
+      wordHighlightColor:
+          prefs.getInt(AppConstants.prefWordHighlightColor) ??
+          AppConstants.defaultWordHighlightColor,
+      wordHighlightBackground:
+          prefs.containsKey(AppConstants.prefWordHighlightBackground)
+              ? prefs.getInt(AppConstants.prefWordHighlightBackground)
+              : null,
+      wordHighlightDecoration: HighlightDecoration.values.firstWhere(
+        (d) =>
+            d.name ==
+            (prefs.getString(AppConstants.prefWordHighlightDecoration) ??
+                AppConstants.defaultWordHighlightDecoration),
+        orElse: () => HighlightDecoration.underline,
+      ),
     );
   }
 
@@ -47,6 +75,38 @@ class LocalSettingsSource {
       settings.themePreference.name,
     );
     await prefs.setString(AppConstants.prefTtsVoice, settings.ttsVoice);
+    await prefs.setInt(
+      AppConstants.prefParagraphHighlightColor,
+      settings.paragraphHighlightColor,
+    );
+    if (settings.paragraphHighlightBackground != null) {
+      await prefs.setInt(
+        AppConstants.prefParagraphHighlightBackground,
+        settings.paragraphHighlightBackground!,
+      );
+    } else {
+      await prefs.remove(AppConstants.prefParagraphHighlightBackground);
+    }
+    await prefs.setString(
+      AppConstants.prefParagraphHighlightDecoration,
+      settings.paragraphHighlightDecoration.name,
+    );
+    await prefs.setInt(
+      AppConstants.prefWordHighlightColor,
+      settings.wordHighlightColor,
+    );
+    if (settings.wordHighlightBackground != null) {
+      await prefs.setInt(
+        AppConstants.prefWordHighlightBackground,
+        settings.wordHighlightBackground!,
+      );
+    } else {
+      await prefs.remove(AppConstants.prefWordHighlightBackground);
+    }
+    await prefs.setString(
+      AppConstants.prefWordHighlightDecoration,
+      settings.wordHighlightDecoration.name,
+    );
   }
 
   Future<String?> getLastArticleUrl() async {

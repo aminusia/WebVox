@@ -12,6 +12,10 @@ class Article {
   final String? nextUrl;
   final String? homeUrl;
 
+  /// True when this article was served from the local cache (not freshly fetched).
+  /// Not persisted to DB — purely a runtime flag.
+  final bool isCached;
+
   const Article({
     required this.id,
     required this.url,
@@ -25,6 +29,7 @@ class Article {
     this.prevUrl,
     this.nextUrl,
     this.homeUrl,
+    this.isCached = false,
   });
 
   List<String> get paragraphs =>
@@ -43,6 +48,7 @@ class Article {
     String? prevUrl,
     String? nextUrl,
     String? homeUrl,
+    bool? isCached,
   }) {
     return Article(
       id: id ?? this.id,
@@ -57,6 +63,7 @@ class Article {
       prevUrl: prevUrl ?? this.prevUrl,
       nextUrl: nextUrl ?? this.nextUrl,
       homeUrl: homeUrl ?? this.homeUrl,
+      isCached: isCached ?? this.isCached,
     );
   }
 
@@ -68,7 +75,6 @@ class Article {
     'author': author,
     'language': language,
     'estimated_read_time': estimatedReadTime,
-    'is_bookmarked': isBookmarked ? 1 : 0,
     'created_at': createdAt,
     'prev_url': prevUrl,
     'next_url': nextUrl,
@@ -88,5 +94,6 @@ class Article {
     prevUrl: map['prev_url'] as String?,
     nextUrl: map['next_url'] as String?,
     homeUrl: map['home_url'] as String?,
+    isCached: true, // loaded from local DB → served from cache
   );
 }

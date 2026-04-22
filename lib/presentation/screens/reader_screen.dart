@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:web_reader/core/services/article_cache_service.dart';
 import 'package:web_reader/domain/entities/article.dart';
 import 'package:web_reader/domain/entities/reading_state.dart';
 import 'package:web_reader/domain/repositories/reading_state_repository.dart';
@@ -15,7 +16,15 @@ import 'package:web_reader/presentation/widgets/tts_control_bar.dart';
 class ReaderScreen extends ConsumerStatefulWidget {
   final Article article;
 
-  const ReaderScreen({super.key, required this.article});
+  /// When true the saved reading position is ignored and reading starts
+  /// from the very beginning (used when navigating to prev/next pages).
+  final bool resetProgress;
+
+  const ReaderScreen({
+    super.key,
+    required this.article,
+    this.resetProgress = false,
+  });
 
   @override
   ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
@@ -34,22 +43,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   bool _showScrollToTop = false;
   bool _autoPlayScheduled = false;
   int? _autoNextCountdown; // null = not counting, 5..1 = counting down
-  bool _ttsWasActive = false; // tracks if TTS has been active this session
   String?
   _pendingAutoNextUrl; // URL to fetch; retried in background until success
   Timer?
   _backgroundRetryTimer; // periodically retries the auto-next fetch in background
-  Article?
-  _prefetchedArticle; // article fetched in background, waiting for foreground to navigate
   late bool _isBookmarked;
 
   // Cached values used when saving state during dispose (ref is invalid then).
   late ReadingStateRepository _readingStateRepo;
+  late ArticleCacheService _cacheService;
   TtsState? _lastTtsState;
   bool _disposing = false; // true once dispose() has been entered
   /// GlobalKeys for precise scrolling to paragraphs.
-  late final List<GlobalKey> _paragraphKeys;
-  Article get article => widget.article;
+  late List<GlobalKey> _paragraphKeys;
+
+  /// The currently displayed article.
+  late Article _article;
+  Article get article => _article;
 
   @override
   void initState() {
@@ -57,6 +67,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     WidgetsBinding.instance.addObserver(this);
     _scroll = ScrollController();
     _readingStateRepo = ref.read(readingStateRepositoryProvider);
+    _cacheService = ref.read(articleCacheServiceProvider);
+    _article = widget.article;
     _isBookmarked = article.isBookmarked;
     // Initialize GlobalKeys for each paragraph
     _paragraphKeys = List.generate(
@@ -64,9 +76,32 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       (_) => GlobalKey(),
     );
     _restorePosition();
+    _cacheService.resetDelaySchedule();
+    _cacheService.startFromArticle(article);
+    // Mark as user-read so this article appears in the recents list
+    // (background-cached articles are NOT marked until the user opens them).
+    // Reload recents AFTER the mark completes so the list is always up-to-date
+    // even when arriving via pushReplacement (where the caller's load() fires
+    // before this screen's initState has a chance to mark the article read).
+    ref.read(articleRepositoryProvider).markArticleRead(article.id).then((_) {
+      if (mounted) ref.read(recentArticlesProvider.notifier).load();
+    });
   }
 
   Future<void> _restorePosition() async {
+    // When navigating prev/next we always start from the beginning.
+    if (widget.resetProgress) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoPlay());
+      return;
+    }
+    final repo = ref.read(articleRepositoryProvider);
+    final isResumable = await repo.isLastUncompletedRead(article.id);
+    if (!mounted) return;
+    if (!isResumable) {
+      // Not the last incomplete read — start fresh.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoPlay());
+      return;
+    }
     final readingStateRepo = _readingStateRepo;
     final saved = await readingStateRepo.getReadingState(article.id);
     if (!mounted) return;
@@ -90,17 +125,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   void _maybeAutoPlay({int startIndex = 0}) {
     if (!mounted || _autoPlayScheduled) return;
     final autoRead = ref.read(settingsProvider).valueOrNull?.autoRead ?? true;
-    if (autoRead) {
-      _autoPlayScheduled = true;
-      ref
-          .read(ttsProvider.notifier)
-          .play(
-            article.paragraphs,
-            startIndex: startIndex,
-            language: article.language,
-            articleTitle: article.title,
-          );
-    }
+    if (!autoRead) return;
+    _autoPlayScheduled = true;
+
+    // TTS is already playing new content queued via transitionToContent —
+    // no need to (re)start it.
+    if (ref.read(ttsProvider).isActive) return;
+
+    ref
+        .read(ttsProvider.notifier)
+        .play(
+          article.paragraphs,
+          startIndex: startIndex,
+          language: article.language,
+          articleTitle: article.title,
+        );
   }
 
   void _onScroll() {
@@ -130,24 +169,42 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     }
   }
 
-  Future<void> _navigateToUrl(String? url) async {
+  Future<void> _navigateToUrl(
+    String? url, {
+    bool resetProgress = false,
+    bool markCurrentCompleted = false,
+  }) async {
     if (url == null || url.isEmpty) return;
 
     setState(() => _isLoading = true);
 
     try {
       final repo = ref.read(articleRepositoryProvider);
+      if (markCurrentCompleted) await repo.markArticleCompleted(article.id);
       final newArticle = await repo.fetchArticle(url);
       if (!mounted) return;
 
-      ref.read(ttsProvider.notifier).stop();
+      // Transition without stopping — keeps audio focus and notification alive.
+      ref
+          .read(ttsProvider.notifier)
+          .transitionToContent(
+            newArticle.paragraphs,
+            language: newArticle.language,
+            articleTitle: newArticle.title,
+          );
       await _saveState();
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
       ref.read(recentArticlesProvider.notifier).load();
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => ReaderScreen(article: newArticle)),
+        MaterialPageRoute(
+          builder:
+              (_) => ReaderScreen(
+                article: newArticle,
+                resetProgress: resetProgress,
+              ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -229,9 +286,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     );
   }
 
-  /// Called when user taps a word.  Immediately highlights the paragraph,
-  /// then starts TTS from that word after 2 seconds.
-  void _onWordTapped(int paragraphIndex, int charOffset) {
+  /// Called when user taps a paragraph. Starts TTS from the beginning of that paragraph.
+  void _onParagraphTapped(int paragraphIndex) {
     final notifier = ref.read(ttsProvider.notifier);
 
     // Cancel any pending scheduled play
@@ -245,15 +301,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     // Immediate visual feedback
     setState(() {
       _highlightedIndex = paragraphIndex;
-      _savedWordOffset = charOffset;
+      _savedWordOffset = 0;
     });
     _scrollToParagraph(paragraphIndex);
 
-    // Schedule TTS start after 2s
+    // Schedule TTS start after 2s from beginning of paragraph
     notifier.schedulePlayFromWord(
       paragraphs: article.paragraphs,
       paragraphIndex: paragraphIndex,
-      charOffset: charOffset,
+      charOffset: 0,
       language: article.language,
       articleTitle: article.title,
     );
@@ -338,8 +394,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       return;
     }
 
-    // Stop TTS and navigate away — home screen (or caller) will handle loading
-    ref.read(ttsProvider.notifier).stop();
+    // Transition without stopping — keeps audio focus and notification alive.
+    // (stop() was here before; now TTS continues playing until the article loads)
     await _saveState();
 
     if (!mounted) return;
@@ -353,6 +409,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     try {
       final newArticle = await repo.fetchArticle(url);
       if (!mounted) return;
+      ref
+          .read(ttsProvider.notifier)
+          .transitionToContent(
+            newArticle.paragraphs,
+            language: newArticle.language,
+            articleTitle: newArticle.title,
+          );
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
       ref.read(recentArticlesProvider.notifier).load();
       loadingSnack.close();
@@ -406,29 +469,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     setState(() => _isLoading = true);
     try {
       final repo = ref.read(articleRepositoryProvider);
+      await repo.markArticleCompleted(article.id);
       final newArticle = await repo.fetchArticle(targetUrl);
       if (!mounted) return;
 
-      // If app is still in the background, cache the article and wait for
-      // the foreground — navigation requires an active UI context.
-      final lifecycle = WidgetsBinding.instance.lifecycleState;
-      final inForeground =
-          lifecycle == null ||
-          lifecycle == AppLifecycleState.resumed ||
-          lifecycle == AppLifecycleState.inactive;
-      if (!inForeground) {
-        _prefetchedArticle = newArticle;
-        _backgroundRetryTimer?.cancel();
-        _backgroundRetryTimer = null;
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      _navigateWithArticle(newArticle);
+      _navigateWithArticle(newArticle, resetProgress: true);
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      // If the fetch failed, check whether it looks like a transient network
       // error (e.g. DNS unavailable right after screen turns off).
       final msg = e.toString();
       final isNetworkError =
@@ -469,32 +515,34 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       _backgroundRetryTimer = null;
       _pendingAutoNextUrl = null;
 
-      final lifecycle = WidgetsBinding.instance.lifecycleState;
-      final inForeground =
-          lifecycle == null ||
-          lifecycle == AppLifecycleState.resumed ||
-          lifecycle == AppLifecycleState.inactive;
-      if (inForeground) {
-        _navigateWithArticle(newArticle);
-      } else {
-        // Keep the fetched article ready; navigate when app is foregrounded.
-        _prefetchedArticle = newArticle;
-      }
+      _navigateWithArticle(newArticle, resetProgress: true);
     } catch (_) {
       // Still failing — keep waiting, timer will fire again.
     }
   }
 
-  void _navigateWithArticle(Article newArticle) {
+  void _navigateWithArticle(Article newArticle, {bool resetProgress = false}) {
     if (!mounted) return;
-    ref.read(ttsProvider.notifier).stop();
+    // Queue new content without stopping — keeps audio focus held in background.
+    ref
+        .read(ttsProvider.notifier)
+        .transitionToContent(
+          newArticle.paragraphs,
+          language: newArticle.language,
+          articleTitle: newArticle.title,
+        );
     _saveState();
+    ref.read(articleRepositoryProvider).markArticleCompleted(article.id);
     ref.read(settingsRepositoryProvider).setLastArticleUrl(newArticle.url);
     ref.read(recentArticlesProvider.notifier).load();
 
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => ReaderScreen(article: newArticle)),
+      MaterialPageRoute(
+        builder:
+            (_) =>
+                ReaderScreen(article: newArticle, resetProgress: resetProgress),
+      ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -510,22 +558,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _cacheService.resume();
       // Cancel background retry — we're back in the foreground.
       _backgroundRetryTimer?.cancel();
       _backgroundRetryTimer = null;
 
-      if (_prefetchedArticle != null) {
-        // Article was fetched while in background; navigate now.
-        final fetched = _prefetchedArticle!;
-        _pendingAutoNextUrl = null;
-        _prefetchedArticle = null;
-        _navigateWithArticle(fetched);
-      } else if (_pendingAutoNextUrl != null) {
+      if (_pendingAutoNextUrl != null) {
         // Retry never succeeded; try immediately now that we're foreground.
         final url = _pendingAutoNextUrl!;
         _pendingAutoNextUrl = null;
         _navigateToUrlAutoNext(url: url);
       }
+      // } else if (state == AppLifecycleState.paused ||
+      //     state == AppLifecycleState.hidden) {
+      //   _cacheService.pause();
     }
   }
 
@@ -549,6 +595,23 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     _lastTtsState = ttsState; // keep cached for use in dispose
     final settingsAsync = ref.watch(settingsProvider);
     final fontSize = settingsAsync.valueOrNull?.fontSize ?? 18.0;
+    final settingsVal = settingsAsync.valueOrNull;
+    final paragraphHighlightStyle =
+        settingsVal != null
+            ? HighlightStyle.fromSettings(
+              colorValue: settingsVal.paragraphHighlightColor,
+              backgroundValue: settingsVal.paragraphHighlightBackground,
+              decoration: settingsVal.paragraphHighlightDecoration,
+            )
+            : HighlightStyle.defaultParagraph;
+    final wordHighlightStyle =
+        settingsVal != null
+            ? HighlightStyle.fromSettings(
+              colorValue: settingsVal.wordHighlightColor,
+              backgroundValue: settingsVal.wordHighlightBackground,
+              decoration: settingsVal.wordHighlightDecoration,
+            )
+            : HighlightStyle.defaultWord;
     final paragraphs = article.paragraphs;
 
     // Keep _highlightedIndex in sync with TTS paragraph changes
@@ -556,15 +619,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       if (next.isActive && next.currentIndex != _highlightedIndex) {
         _onParagraphChanged(next.currentIndex);
       }
-      // Track if TTS has ever been active
-      if (next.isActive) _ttsWasActive = true;
-      // Detect natural completion (playing → idle = all paragraphs finished)
-      if (_ttsWasActive &&
-          prev != null &&
-          prev.status != TtsStatus.idle &&
-          next.status == TtsStatus.idle) {
-        _ttsWasActive = false;
-        _startAutoNextCountdown();
+      // Start auto-next countdown as soon as the last paragraph is dispatched
+      // to the TTS engine (rather than waiting for it to finish playing).
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      final isBackground =
+          lifecycle != null && lifecycle != AppLifecycleState.resumed;
+
+      if (prev != null) {
+        if (isBackground &&
+            next.isActive &&
+            next.total > 0 &&
+            next.currentIndex == next.total - 1 &&
+            prev.currentIndex != next.currentIndex) {
+          // Screen is off or app is backgrounded — skip the countdown and
+          // navigate immediately so audio continues without interruption.
+          _navigateToUrlAutoNext();
+        } else if (!isBackground &&
+            prev.status != TtsStatus.idle &&
+            next.status == TtsStatus.idle) {
+          _startAutoNextCountdown();
+        }
       }
     });
 
@@ -587,7 +661,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                   child: Text(
                     article.title,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: article.isCached ? Colors.blue : null,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -678,6 +754,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                 ? null
                                                 : () => _navigateToUrl(
                                                   article.prevUrl,
+                                                  resetProgress: true,
                                                 ),
                                         icon: const Icon(Icons.chevron_left),
                                         label: const Text('Previous'),
@@ -700,6 +777,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                 ? null
                                                 : () => _navigateToUrl(
                                                   article.nextUrl,
+                                                  resetProgress: true,
+                                                  markCurrentCompleted: true,
                                                 ),
                                         icon: const Icon(Icons.chevron_right),
                                         label: const Text('Next'),
@@ -737,8 +816,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                             wordStart:
                                 ttsState.isPlaying ? ttsState.wordStart : -1,
                             wordEnd: ttsState.isPlaying ? ttsState.wordEnd : -1,
-                            onWordTap: _onWordTapped,
+                            onTap: _onParagraphTapped,
                             paragraphKeys: _paragraphKeys,
+                            paragraphHighlightStyle: paragraphHighlightStyle,
+                            wordHighlightStyle: wordHighlightStyle,
                           ),
                           const SizedBox(height: 32),
                           // Navigation buttons (bottom)
@@ -758,6 +839,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                               ? null
                                               : () => _navigateToUrl(
                                                 article.prevUrl,
+                                                resetProgress: true,
                                               ),
                                       icon: const Icon(Icons.chevron_left),
                                       label: const Text('Previous'),
@@ -785,6 +867,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                     ? null
                                                     : () => _navigateToUrl(
                                                       article.nextUrl,
+                                                      resetProgress: true,
+                                                      markCurrentCompleted:
+                                                          true,
                                                     ),
                                             icon: const Icon(
                                               Icons.chevron_right,
@@ -811,6 +896,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                 ? null
                                                 : () => _navigateToUrl(
                                                   article.nextUrl,
+                                                  resetProgress: true,
+                                                  markCurrentCompleted: true,
                                                 ),
                                         icon: const Icon(Icons.chevron_right),
                                         label: const Text('Next'),

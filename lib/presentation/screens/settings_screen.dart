@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:web_reader/core/utils/language_detector.dart';
 import 'package:web_reader/domain/entities/settings.dart';
 import 'package:web_reader/presentation/providers/providers.dart';
+import 'package:web_reader/presentation/screens/cache_log_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -181,7 +183,166 @@ class _SettingsForm extends ConsumerWidget {
             notifier.update(settings.copyWith(autoNext: val));
           },
         ),
+
+        const Divider(height: 32),
+
+        Text('Highlighting', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Customize how the active paragraph and word are highlighted during playback.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ── Paragraph highlight ─────────────────────────────────────────
+        Text(
+          'Paragraph',
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        _HighlightStyleEditor(
+          colorValue: settings.paragraphHighlightColor,
+          backgroundValue: settings.paragraphHighlightBackground,
+          decoration: settings.paragraphHighlightDecoration,
+          onChanged: ({
+            required int colorValue,
+            required int? backgroundValue,
+            required HighlightDecoration decoration,
+          }) {
+            notifier.update(
+              settings.copyWith(
+                paragraphHighlightColor: colorValue,
+                paragraphHighlightBackground: backgroundValue,
+                paragraphHighlightDecoration: decoration,
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+
+        // ── Word highlight ──────────────────────────────────────────────
+        Text(
+          'Word',
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        _HighlightStyleEditor(
+          colorValue: settings.wordHighlightColor,
+          backgroundValue: settings.wordHighlightBackground,
+          decoration: settings.wordHighlightDecoration,
+          onChanged: ({
+            required int colorValue,
+            required int? backgroundValue,
+            required HighlightDecoration decoration,
+          }) {
+            notifier.update(
+              settings.copyWith(
+                wordHighlightColor: colorValue,
+                wordHighlightBackground: backgroundValue,
+                wordHighlightDecoration: decoration,
+              ),
+            );
+          },
+        ),
+
+        const Divider(height: 32),
+
+        Text('Cache', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+
+        ListTile(
+          leading: const Icon(Icons.history_outlined),
+          title: const Text('Cache log'),
+          subtitle: const Text('View background caching activity'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap:
+              () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const CacheLogScreen())),
+        ),
+
+        const SizedBox(height: 8),
+
+        _ClearCacheButton(),
+
+        const Divider(height: 32),
+
+        Text('About', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        const _AppVersionTile(),
       ],
+    );
+  }
+}
+
+class _ClearCacheButton extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_ClearCacheButton> createState() => _ClearCacheButtonState();
+}
+
+class _ClearCacheButtonState extends ConsumerState<_ClearCacheButton> {
+  bool _busy = false;
+
+  Future<void> _clear() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Clear cache?'),
+            content: const Text(
+              'All cached articles (except bookmarks) will be deleted. '
+              'The cache queue will also be cleared.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      final repo = ref.read(articleRepositoryProvider);
+      final cacheService = ref.read(articleCacheServiceProvider);
+      final deleted = await repo.clearCachedArticles();
+      await cacheService.clearQueue();
+      ref.read(recentArticlesProvider.notifier).load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Cache cleared ($deleted articles removed).')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading:
+          _busy
+              ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+              : const Icon(Icons.delete_sweep_outlined),
+      title: const Text('Clear cache'),
+      subtitle: const Text('Delete all cached articles except bookmarks'),
+      onTap: _busy ? null : _clear,
     );
   }
 }
@@ -259,6 +420,345 @@ class _VoiceSelector extends ConsumerWidget {
           },
         );
       },
+    );
+  }
+}
+
+// ─── App version ─────────────────────────────────────────────────────────────
+
+class _AppVersionTile extends StatefulWidget {
+  const _AppVersionTile();
+
+  @override
+  State<_AppVersionTile> createState() => _AppVersionTileState();
+}
+
+class _AppVersionTileState extends State<_AppVersionTile> {
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) {
+        setState(() {
+          _version = '${info.version} (${info.buildNumber})';
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.info_outline),
+      title: const Text('Version'),
+      trailing: Text(
+        _version.isEmpty ? '…' : _version,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Highlight style editor ───────────────────────────────────────────────────
+
+typedef _OnHighlightChanged =
+    void Function({
+      required int colorValue,
+      required int? backgroundValue,
+      required HighlightDecoration decoration,
+    });
+
+class _HighlightStyleEditor extends StatelessWidget {
+  final int colorValue;
+  final int? backgroundValue;
+  final HighlightDecoration decoration;
+  final _OnHighlightChanged onChanged;
+
+  const _HighlightStyleEditor({
+    required this.colorValue,
+    required this.backgroundValue,
+    required this.decoration,
+    required this.onChanged,
+  });
+
+  void _pickColor(BuildContext context, bool isBackground) {
+    final currentColor =
+        isBackground
+            ? (backgroundValue != null ? Color(backgroundValue!) : null)
+            : Color(colorValue);
+
+    showDialog<Color?>(
+      context: context,
+      builder:
+          (ctx) => _ColorPickerDialog(
+            selectedColor: currentColor,
+            allowNone: isBackground,
+          ),
+    ).then((picked) {
+      if (!context.mounted) return;
+      if (isBackground) {
+        // null means "remove background"
+        onChanged(
+          colorValue: colorValue,
+          backgroundValue:
+              picked == null && backgroundValue != null
+                  ? null
+                  : picked?.toARGB32() ?? backgroundValue,
+          decoration: decoration,
+        );
+      } else if (picked != null) {
+        onChanged(
+          colorValue: picked.toARGB32(),
+          backgroundValue: backgroundValue,
+          decoration: decoration,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = Color(colorValue);
+    final bgColor = backgroundValue != null ? Color(backgroundValue!) : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Preview
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).colorScheme.outline),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            'Sample highlighted text',
+            style: TextStyle(
+              color: textColor,
+              backgroundColor: bgColor,
+              decoration: _toTextDecoration(decoration),
+              decorationColor: textColor,
+              fontSize: 16,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Text color row
+        Row(
+          children: [
+            const SizedBox(width: 2),
+            const Text('Text color'),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => _pickColor(context, false),
+              child: _ColorSwatch(color: textColor),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Background color row
+        Row(
+          children: [
+            const SizedBox(width: 2),
+            const Text('Background'),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => _pickColor(context, true),
+              child:
+                  bgColor != null
+                      ? _ColorSwatch(color: bgColor)
+                      : _ColorSwatchNone(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Decoration dropdown
+        DropdownButtonFormField<HighlightDecoration>(
+          initialValue: decoration,
+          decoration: const InputDecoration(
+            labelText: 'Decoration',
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: HighlightDecoration.none,
+              child: Text('None'),
+            ),
+            DropdownMenuItem(
+              value: HighlightDecoration.underline,
+              child: Text('Underline'),
+            ),
+            DropdownMenuItem(
+              value: HighlightDecoration.lineThrough,
+              child: Text('Strikethrough'),
+            ),
+            DropdownMenuItem(
+              value: HighlightDecoration.overline,
+              child: Text('Overline'),
+            ),
+          ],
+          onChanged: (val) {
+            if (val == null) return;
+            onChanged(
+              colorValue: colorValue,
+              backgroundValue: backgroundValue,
+              decoration: val,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  TextDecoration _toTextDecoration(HighlightDecoration d) {
+    switch (d) {
+      case HighlightDecoration.underline:
+        return TextDecoration.underline;
+      case HighlightDecoration.lineThrough:
+        return TextDecoration.lineThrough;
+      case HighlightDecoration.overline:
+        return TextDecoration.overline;
+      case HighlightDecoration.none:
+        return TextDecoration.none;
+    }
+  }
+}
+
+class _ColorSwatch extends StatelessWidget {
+  final Color color;
+
+  const _ColorSwatch({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: color,
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
+  }
+}
+
+class _ColorSwatchNone extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Center(
+        child: Icon(Icons.block, size: 18, color: Colors.grey),
+      ),
+    );
+  }
+}
+
+// ─── Color picker dialog ──────────────────────────────────────────────────────
+
+class _ColorPickerDialog extends StatelessWidget {
+  final Color? selectedColor;
+  final bool allowNone;
+
+  const _ColorPickerDialog({
+    required this.selectedColor,
+    this.allowNone = false,
+  });
+
+  static const List<Color> _palette = [
+    Color(0xFF2196F3),
+    Color(0xFFB8860B),
+    Color(0xFF4CAF50),
+    Color(0xFFF44336),
+    Color(0xFFFF9800),
+    Color(0xFF9C27B0),
+    Color(0xFF00BCD4),
+    Color(0xFFE91E63),
+    Color(0xFF795548),
+    Color(0xFF607D8B),
+    Color(0xFF000000),
+    Color(0xFFFFFFFF),
+    Color(0xFFFFEB3B), // yellow
+    Color(0xFF8BC34A), // light green
+    Color(0xFF03A9F4), // light blue
+    Color(0xFFFF5722), // deep orange
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Pick a color'),
+      content: SizedBox(
+        width: 260,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (allowNone)
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(null),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.block, size: 20, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                ..._palette.map(
+                  (c) => GestureDetector(
+                    onTap: () => Navigator.of(context).pop(c),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: c,
+                        border: Border.all(
+                          color:
+                              selectedColor == c
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline,
+                          width: selectedColor == c ? 3 : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(selectedColor),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

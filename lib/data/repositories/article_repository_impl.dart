@@ -35,6 +35,7 @@ class ArticleRepositoryImpl implements ArticleRepository {
         prevUrl: cached.prevUrl,
         nextUrl: cached.nextUrl,
         homeUrl: cached.homeUrl,
+        isCached: true,
       );
       await _local.insertOrUpdate(refreshed);
       return refreshed;
@@ -88,4 +89,23 @@ class ArticleRepositoryImpl implements ArticleRepository {
       await _local.pruneOldest(AppConstants.maxCachedArticles);
     }
   }
+
+  @override
+  Future<int> clearCachedArticles() => _local.deleteNonBookmarked();
+
+  @override
+  Future<List<Article>> getAllCached() => _local.getAll();
+
+  @override
+  Future<void> markArticleRead(String id) => _local.markUserRead(id);
+
+  @override
+  Future<void> markArticleCompleted(String id) => _local.markCompleted(id);
+
+  @override
+  Future<bool> isLastUncompletedRead(String id) =>
+      _local.isLastUncompletedRead(id);
+
+  @override
+  Future<void> removeFromHistory(String id) => _local.removeFromHistory(id);
 }

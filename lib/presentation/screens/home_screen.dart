@@ -177,6 +177,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               children: [
                 // Recent tab
                 recentAsync.when(
+                  skipLoadingOnReload: true,
                   loading:
                       () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('$e')),
@@ -194,7 +195,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 onDelete: (id) async {
                                   await ref
                                       .read(articleRepositoryProvider)
-                                      .deleteArticle(id);
+                                      .removeFromHistory(id);
                                   ref
                                       .read(recentArticlesProvider.notifier)
                                       .load();
@@ -203,6 +204,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
                 // Bookmarks tab
                 bookmarksAsync.when(
+                  skipLoadingOnReload: true,
                   loading:
                       () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('$e')),
@@ -221,7 +223,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 onDelete: (id) async {
                                   await ref
                                       .read(articleRepositoryProvider)
-                                      .deleteArticle(id);
+                                      .toggleBookmark(id);
                                   ref.read(bookmarksProvider.notifier).load();
                                 },
                               ),
@@ -301,7 +303,7 @@ class _UrlInputBar extends StatelessWidget {
   }
 }
 
-class _ArticleListWithShowMore extends StatelessWidget {
+class _ArticleListWithShowMore extends StatefulWidget {
   final List<Article> articles;
   final int showCount;
   final VoidCallback onShowMore;
@@ -317,28 +319,69 @@ class _ArticleListWithShowMore extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final displayedArticles = articles.take(showCount).toList();
-    final hasMore = articles.length > showCount;
+  State<_ArticleListWithShowMore> createState() =>
+      _ArticleListWithShowMoreState();
+}
 
-    return ListView.builder(
-      itemCount: displayedArticles.length + (hasMore ? 1 : 0),
-      itemBuilder: (_, i) {
-        // Show more button at the end
-        if (i == displayedArticles.length) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: ElevatedButton(
-                onPressed: onShowMore,
-                child: const Text('Show More'),
-              ),
-            ),
-          );
-        }
+class _ArticleListWithShowMoreState extends State<_ArticleListWithShowMore> {
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+  late List<Article> _items;
+  final Set<String> _removingIds = {};
 
-        final a = displayedArticles[i];
-        return ListTile(
+  @override
+  void initState() {
+    super.initState();
+    _items = widget.articles.take(widget.showCount).toList();
+  }
+
+  @override
+  void didUpdateWidget(_ArticleListWithShowMore old) {
+    super.didUpdateWidget(old);
+    // When the provider pushes a new list (after delete/reload), sync _items.
+    // We already animated the removed tile out; just refresh the rest.
+    final next = widget.articles.take(widget.showCount).toList();
+    // Insert any newly added items at the top.
+    for (int i = 0; i < next.length; i++) {
+      if (i >= _items.length || _items[i].id != next[i].id) {
+        // Skip rebuild if the only difference is an item currently animating out.
+        if (_removingIds.isNotEmpty) return;
+        // Rebuild fully on structural changes other than a single removal
+        // (e.g. "show more", refresh) — no animation needed for additions.
+        setState(() => _items = next);
+        return;
+      }
+    }
+    // Trim any items that are in _items but not in next.
+    if (_items.length > next.length && _removingIds.isEmpty) {
+      setState(() => _items = next);
+    }
+  }
+
+  void _removeItem(int index) {
+    final removed = _items[index];
+    _removingIds.add(removed.id);
+    _items.removeAt(index);
+    _listKey.currentState?.removeItem(
+      index,
+      (context, animation) => _buildTile(context, removed, animation),
+      duration: const Duration(milliseconds: 300),
+    );
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _removingIds.remove(removed.id);
+    });
+    widget.onDelete(removed.id);
+  }
+
+  Widget _buildTile(
+    BuildContext context,
+    Article a,
+    Animation<double> animation,
+  ) {
+    return SizeTransition(
+      sizeFactor: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+      child: FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+        child: ListTile(
           leading:
               a.isBookmarked
                   ? const Icon(Icons.bookmark, color: Colors.amber)
@@ -350,10 +393,38 @@ class _ArticleListWithShowMore extends StatelessWidget {
           ),
           trailing: IconButton(
             icon: const Icon(Icons.delete_outline),
-            onPressed: () => onDelete(a.id),
+            onPressed: () {
+              final i = _items.indexOf(a);
+              if (i >= 0) _removeItem(i);
+            },
           ),
-          onTap: () => onTap(a),
-        );
+          onTap: () => widget.onTap(a),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasMore = widget.articles.length > widget.showCount;
+
+    return AnimatedList(
+      key: _listKey,
+      initialItemCount: _items.length + (hasMore ? 1 : 0),
+      itemBuilder: (context, i, animation) {
+        if (i == _items.length) {
+          // "Show More" button
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: ElevatedButton(
+                onPressed: widget.onShowMore,
+                child: const Text('Show More'),
+              ),
+            ),
+          );
+        }
+        return _buildTile(context, _items[i], animation);
       },
     );
   }
