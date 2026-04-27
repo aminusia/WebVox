@@ -6,26 +6,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_reader/domain/entities/article.dart';
 import 'package:web_reader/domain/repositories/article_repository.dart';
 
-/// Background service that proactively caches upcoming (next) and previous
-/// articles while the user is reading.
+/// Background service that proactively caches upcoming (next) articles
+/// while the user is reading.
 ///
 /// Caching strategy:
-/// - Fetches 4 "next" articles for every 1 "prev" article.
+/// - Only caches "next" articles (prev links are not cached).
 /// - Each fetch is delayed by a random 1–5 minutes (polite crawling).
 /// - The queue is persisted in SharedPreferences so it survives app restarts.
 /// - Incrementally extends the chain: when a fetched article has its own
-///   next/prev URL those are enqueued automatically.
+///   next URL it is enqueued automatically.
 class ArticleCacheService {
   static const _prefNextQueue = 'cache_next_queue';
-  static const _prefPrevQueue = 'cache_prev_queue';
-  static const int _nextPerPrev = 4; // ratio: 4 next → 1 prev
 
   final ArticleRepository _repo;
   final Random _rng = Random();
 
   final List<String> _nextQueue = [];
-  final List<String> _prevQueue = [];
-  int _nextFetchedSincePrev = 0;
 
   Timer? _timer;
   bool _paused = false;
@@ -74,10 +70,7 @@ class ArticleCacheService {
     await _saveQueue();
     _started = true;
     _paused = false;
-    _log(
-      'Cache started. '
-      'Next queue: ${_nextQueue.length}, Prev queue: ${_prevQueue.length}',
-    );
+    _log('Cache started. Next queue: ${_nextQueue.length}');
     _scheduleNext();
   }
 
@@ -97,7 +90,7 @@ class ArticleCacheService {
 
   /// Resume processing (e.g. screen turned back on).
   void resume() {
-    if (!_started) return;
+    if (!_started || !_paused) return;
     _paused = false;
     _log('Cache resumed.');
     _scheduleNext();
@@ -108,8 +101,6 @@ class ArticleCacheService {
     _timer?.cancel();
     _timer = null;
     _nextQueue.clear();
-    _prevQueue.clear();
-    _nextFetchedSincePrev = 0;
     await _saveQueue();
     _log('Cache queue cleared.');
   }
@@ -128,13 +119,9 @@ class ArticleCacheService {
     if (article.nextUrl != null && !await _isCachedOrQueued(article.nextUrl!)) {
       _nextQueue.add(article.nextUrl!);
     }
-    if (article.prevUrl != null && !await _isCachedOrQueued(article.prevUrl!)) {
-      _prevQueue.add(article.prevUrl!);
-    }
   }
 
-  bool _isQueued(String url) =>
-      _nextQueue.contains(url) || _prevQueue.contains(url);
+  bool _isQueued(String url) => _nextQueue.contains(url);
 
   Future<bool> _isCachedOrQueued(String url) async {
     if (_isQueued(url)) return true;
@@ -143,7 +130,7 @@ class ArticleCacheService {
 
   void _scheduleNext() {
     if (_paused) return;
-    if (_nextQueue.isEmpty && _prevQueue.isEmpty) return;
+    if (_nextQueue.isEmpty) return;
 
     // Staged delay schedule (resets each time a new page is opened):
     //   fetch #1 → 5 s
@@ -166,7 +153,7 @@ class ArticleCacheService {
     _timer = Timer(Duration(seconds: delaySeconds), _fetchNext);
     _log(
       'Next cache fetch scheduled in $delayLabel '
-      '(next: ${_nextQueue.length}, prev: ${_prevQueue.length} queued).',
+      '(${_nextQueue.length} queued).',
     );
   }
 
@@ -178,89 +165,51 @@ class ArticleCacheService {
     while (true) {
       if (_paused) return;
 
-      String? url;
-      bool isNext;
+      if (_nextQueue.isEmpty) return;
 
-      // Pick URL according to 4:1 ratio
-      if (_nextFetchedSincePrev < _nextPerPrev && _nextQueue.isNotEmpty) {
-        url = _nextQueue.removeAt(0);
-        isNext = true;
-        _nextFetchedSincePrev++;
-      } else if (_prevQueue.isNotEmpty) {
-        url = _prevQueue.removeAt(0);
-        isNext = false;
-        _nextFetchedSincePrev = 0;
-      } else if (_nextQueue.isNotEmpty) {
-        // prev queue exhausted but next still has items — keep going
-        url = _nextQueue.removeAt(0);
-        isNext = true;
-        _nextFetchedSincePrev++;
-      } else {
-        return; // nothing left to cache
-      }
-
+      final url = _nextQueue.removeAt(0);
       await _saveQueue();
-
-      final direction = isNext ? 'next' : 'prev';
 
       // If already in cache, extend the chain and immediately continue.
       final alreadyCached = await _repo.getCachedArticle(url);
       if (alreadyCached != null) {
         _log(
-          'Already cached ($direction): "${alreadyCached.title}" — skipping fetch.',
+          'Already cached (next): "${alreadyCached.title}" — skipping fetch.',
         );
-        if (isNext &&
-            alreadyCached.nextUrl != null &&
+        if (alreadyCached.nextUrl != null &&
             !await _isCachedOrQueued(alreadyCached.nextUrl!)) {
           _nextQueue.add(alreadyCached.nextUrl!);
           _log('Enqueued next: ${alreadyCached.nextUrl}');
-        }
-        if (!isNext &&
-            alreadyCached.prevUrl != null &&
-            !await _isCachedOrQueued(alreadyCached.prevUrl!)) {
-          _prevQueue.add(alreadyCached.prevUrl!);
-          _log('Enqueued prev: ${alreadyCached.prevUrl}');
         }
         await _saveQueue();
         continue; // pick the next URL without waiting
       }
 
       // Not cached — fetch from network, then break to apply the delay.
-      _log('Caching $direction: $url …');
+      _log('Caching next: $url …');
       try {
         final article = await _repo.fetchArticle(url);
-        _log('Cached $direction OK: "${article.title}"');
+        _log('Cached next OK: "${article.title}"');
         // Incrementally extend the chain
-        if (isNext &&
-            article.nextUrl != null &&
+        if (article.nextUrl != null &&
             !await _isCachedOrQueued(article.nextUrl!)) {
           _nextQueue.add(article.nextUrl!);
           _log('Enqueued next: ${article.nextUrl}');
         }
-        if (!isNext &&
-            article.prevUrl != null &&
-            !await _isCachedOrQueued(article.prevUrl!)) {
-          _prevQueue.add(article.prevUrl!);
-          _log('Enqueued prev: ${article.prevUrl}');
-        }
         _fetchesSincePageOpen++;
         await _saveQueue();
       } catch (e) {
-        _log('Cache $direction FAILED ($url): $e — will retry.');
+        _log('Cache next FAILED ($url): $e — will retry.');
         // Re-enqueue at the front so it is retried next round.
         // Do NOT increment the counter so the retry keeps the same delay slot.
-        if (isNext) {
-          _nextQueue.insert(0, url);
-        } else {
-          _prevQueue.insert(0, url);
-        }
+        _nextQueue.insert(0, url);
         await _saveQueue();
       }
       break; // after one network fetch, apply the normal polite delay
     }
 
     // Schedule the next fetch if the queue is still non-empty
-    if (!_paused && (_nextQueue.isNotEmpty || _prevQueue.isNotEmpty)) {
+    if (!_paused && _nextQueue.isNotEmpty) {
       _scheduleNext();
     }
   }
@@ -270,17 +219,10 @@ class ArticleCacheService {
   Future<void> _loadQueue() async {
     final prefs = await SharedPreferences.getInstance();
     final nextRaw = prefs.getString(_prefNextQueue);
-    final prevRaw = prefs.getString(_prefPrevQueue);
     if (nextRaw != null) {
       final list = (jsonDecode(nextRaw) as List).cast<String>();
       for (final u in list) {
         if (!_nextQueue.contains(u)) _nextQueue.add(u);
-      }
-    }
-    if (prevRaw != null) {
-      final list = (jsonDecode(prevRaw) as List).cast<String>();
-      for (final u in list) {
-        if (!_prevQueue.contains(u)) _prevQueue.add(u);
       }
     }
   }
@@ -288,6 +230,5 @@ class ArticleCacheService {
   Future<void> _saveQueue() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefNextQueue, jsonEncode(_nextQueue));
-    await prefs.setString(_prefPrevQueue, jsonEncode(_prevQueue));
   }
 }

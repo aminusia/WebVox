@@ -77,7 +77,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     );
     _restorePosition();
     _cacheService.resetDelaySchedule();
-    _cacheService.startFromArticle(article);
+    _maybeStartCache();
     // Mark as user-read so this article appears in the recents list
     // (background-cached articles are NOT marked until the user opens them).
     // Reload recents AFTER the mark completes so the list is always up-to-date
@@ -86,6 +86,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     ref.read(articleRepositoryProvider).markArticleRead(article.id).then((_) {
       if (mounted) ref.read(recentArticlesProvider.notifier).load();
     });
+  }
+
+  Future<void> _maybeStartCache() async {
+    final settings = ref.read(settingsProvider).valueOrNull;
+    if (settings == null || !settings.cachingEnabled) return;
+    await _cacheService.startFromArticle(article);
   }
 
   Future<void> _restorePosition() async {
@@ -419,6 +425,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
       ref.read(recentArticlesProvider.notifier).load();
       loadingSnack.close();
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => ReaderScreen(article: newArticle)),
       );
@@ -432,7 +439,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   }
 
   void _startAutoNextCountdown() {
-    if (!mounted) return;
+    if (!mounted || _countdownTimer != null) return;
     final settings = ref.read(settingsProvider).valueOrNull;
     if (settings == null || !settings.autoNext) return;
     if (article.nextUrl == null) return;
@@ -482,6 +489,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           msg.contains('Failed host lookup') ||
           msg.contains('NetworkException') ||
           msg.contains('ClientException');
+      if (mounted) setState(() => _isLoading = false);
       if (isNetworkError) {
         // Keep retrying in background every 15 s while the process is alive
         // (kept alive by the audio_service foreground service).
@@ -492,9 +500,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           (_) => _retryAutoNextInBackground(),
         );
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load: $e')));
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Failed to load: $e')));
+        }
       }
     }
   }
@@ -544,14 +554,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 ReaderScreen(article: newArticle, resetProgress: resetProgress),
       ),
     );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Automatically continued to next page'),
-          duration: Duration(seconds: 3),
-        ),
-      );
+
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      final isBackground =
+          lifecycle != null && lifecycle != AppLifecycleState.resumed;
+      if (!isBackground) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Automatically continued to next page'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     });
   }
 
@@ -569,9 +586,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
         _pendingAutoNextUrl = null;
         _navigateToUrlAutoNext(url: url);
       }
-      // } else if (state == AppLifecycleState.paused ||
-      //     state == AppLifecycleState.hidden) {
-      //   _cacheService.pause();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      final settings = ref.read(settingsProvider).valueOrNull;
+      final allowBackground = settings?.cacheInBackground ?? false;
+      if (!allowBackground) {
+        _cacheService.pause();
+      }
     }
   }
 
@@ -633,7 +654,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             prev.currentIndex != next.currentIndex) {
           // Screen is off or app is backgrounded — skip the countdown and
           // navigate immediately so audio continues without interruption.
-          _navigateToUrlAutoNext();
+          _navigateToUrlAutoNext(url: article.nextUrl);
         } else if (!isBackground &&
             prev.status != TtsStatus.idle &&
             next.status == TtsStatus.idle) {

@@ -256,6 +256,31 @@ class _SettingsForm extends ConsumerWidget {
         Text('Cache', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
 
+        SwitchListTile(
+          title: const Text('Enable background caching'),
+          subtitle: const Text('Pre-fetch next articles while reading'),
+          value: settings.cachingEnabled,
+          onChanged: (val) {
+            notifier.update(settings.copyWith(cachingEnabled: val));
+          },
+        ),
+        const SizedBox(height: 8),
+
+        SwitchListTile(
+          title: const Text('Cache while in background'),
+          subtitle: const Text(
+            'Continue pre-fetching when the app is minimised',
+          ),
+          value: settings.cacheInBackground && settings.cachingEnabled,
+          onChanged:
+              settings.cachingEnabled
+                  ? (val) {
+                    notifier.update(settings.copyWith(cacheInBackground: val));
+                  }
+                  : null,
+        ),
+        const SizedBox(height: 8),
+
         ListTile(
           leading: const Icon(Icons.history_outlined),
           title: const Text('Cache log'),

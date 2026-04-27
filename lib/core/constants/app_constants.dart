@@ -19,12 +19,18 @@ class AppConstants {
   static const String prefWordHighlightBackground = 'word_highlight_bg';
   static const String prefWordHighlightDecoration = 'word_highlight_deco';
 
+  // Caching prefs
+  static const String prefCachingEnabled = 'caching_enabled';
+  static const String prefCacheInBackground = 'cache_in_background';
+
   static const String defaultTtsLanguage = 'en-US';
   static const double defaultTtsSpeed = 0.5;
   static const double defaultFontSize = 18.0;
   static const bool defaultAutoNext = true;
   static const bool defaultAutoRead = true;
   static const String defaultThemeMode = 'system';
+  static const bool defaultCachingEnabled = true;
+  static const bool defaultCacheInBackground = false;
 
   // Highlight style defaults
   static const int defaultParagraphHighlightColor = 0xFF2196F3; // Colors.blue

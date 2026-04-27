@@ -60,6 +60,12 @@ class LocalSettingsSource {
                 AppConstants.defaultWordHighlightDecoration),
         orElse: () => HighlightDecoration.underline,
       ),
+      cachingEnabled:
+          prefs.getBool(AppConstants.prefCachingEnabled) ??
+          AppConstants.defaultCachingEnabled,
+      cacheInBackground:
+          prefs.getBool(AppConstants.prefCacheInBackground) ??
+          AppConstants.defaultCacheInBackground,
     );
   }
 
@@ -106,6 +112,14 @@ class LocalSettingsSource {
     await prefs.setString(
       AppConstants.prefWordHighlightDecoration,
       settings.wordHighlightDecoration.name,
+    );
+    await prefs.setBool(
+      AppConstants.prefCachingEnabled,
+      settings.cachingEnabled,
+    );
+    await prefs.setBool(
+      AppConstants.prefCacheInBackground,
+      settings.cacheInBackground,
     );
   }
 

@@ -35,6 +35,13 @@ class Settings {
   /// Text decoration applied to the highlighted word.
   final HighlightDecoration wordHighlightDecoration;
 
+  // ── Caching ───────────────────────────────────────────────────────────────
+  /// Whether background caching of next articles is enabled.
+  final bool cachingEnabled;
+
+  /// Whether caching continues when the app is in the background.
+  final bool cacheInBackground;
+
   const Settings({
     required this.ttsLanguage,
     required this.ttsSpeed,
@@ -49,6 +56,8 @@ class Settings {
     this.wordHighlightColor = 0xFFB8860B,
     this.wordHighlightBackground,
     this.wordHighlightDecoration = HighlightDecoration.underline,
+    this.cachingEnabled = true,
+    this.cacheInBackground = false,
   });
 
   Settings copyWith({
@@ -65,6 +74,8 @@ class Settings {
     int? wordHighlightColor,
     Object? wordHighlightBackground = _sentinel,
     HighlightDecoration? wordHighlightDecoration,
+    bool? cachingEnabled,
+    bool? cacheInBackground,
   }) => Settings(
     ttsLanguage: ttsLanguage ?? this.ttsLanguage,
     ttsSpeed: ttsSpeed ?? this.ttsSpeed,
@@ -88,6 +99,8 @@ class Settings {
             : wordHighlightBackground as int?,
     wordHighlightDecoration:
         wordHighlightDecoration ?? this.wordHighlightDecoration,
+    cachingEnabled: cachingEnabled ?? this.cachingEnabled,
+    cacheInBackground: cacheInBackground ?? this.cacheInBackground,
   );
 }
 
