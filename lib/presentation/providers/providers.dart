@@ -10,6 +10,7 @@ import 'package:web_reader/domain/entities/settings.dart';
 import 'package:web_reader/domain/repositories/article_repository.dart';
 import 'package:web_reader/domain/repositories/reading_state_repository.dart';
 import 'package:web_reader/domain/repositories/settings_repository.dart';
+import 'package:web_reader/presentation/providers/article_reader_notifier.dart';
 import 'package:web_reader/presentation/providers/tts_notifier.dart';
 
 // ─── Repositories ────────────────────────────────────────────────────────────
@@ -200,3 +201,12 @@ final voicesProvider = FutureProvider.family<List<Map<String, String>>, String>(
     return ref.read(ttsAudioHandlerProvider).getVoicesForLocale(locale);
   },
 );
+
+// ─── Article Reader ───────────────────────────────────────────────────────────
+
+/// Single provider that owns the full lifecycle of the currently-read article:
+/// loading, position restore, auto-play, auto-next, and saving reading state.
+final articleReaderProvider =
+    NotifierProvider<ArticleReaderNotifier, ArticleReaderState>(
+      ArticleReaderNotifier.new,
+    );

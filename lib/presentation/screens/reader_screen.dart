@@ -1,13 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_reader/core/services/article_cache_service.dart';
 import 'package:web_reader/domain/entities/article.dart';
 import 'package:web_reader/domain/entities/reading_state.dart';
 import 'package:web_reader/domain/repositories/reading_state_repository.dart';
+import 'package:web_reader/presentation/providers/article_reader_notifier.dart';
 import 'package:web_reader/presentation/providers/providers.dart';
 import 'package:web_reader/presentation/providers/tts_notifier.dart';
 import 'package:web_reader/presentation/widgets/article_content_widget.dart';
@@ -33,135 +31,117 @@ class ReaderScreen extends ConsumerStatefulWidget {
 class _ReaderScreenState extends ConsumerState<ReaderScreen>
     with WidgetsBindingObserver {
   late final ScrollController _scroll;
-  Timer? _saveTimer;
-  Timer? _countdownTimer;
 
-  int _highlightedIndex = 0;
-  int _savedWordOffset = 0; // restored from DB; used as TTS start offset
-  bool _showTts = true;
-  bool _isLoading = false;
-  bool _showScrollToTop = false;
-  bool _autoPlayScheduled = false;
-  int? _autoNextCountdown; // null = not counting, 5..1 = counting down
-  String?
-  _pendingAutoNextUrl; // URL to fetch; retried in background until success
-  Timer?
-  _backgroundRetryTimer; // periodically retries the auto-next fetch in background
-  late bool _isBookmarked;
-
-  // Cached values used when saving state during dispose (ref is invalid then).
-  late ReadingStateRepository _readingStateRepo;
-  late ArticleCacheService _cacheService;
-  TtsState? _lastTtsState;
-  bool _disposing = false; // true once dispose() has been entered
-  /// GlobalKeys for precise scrolling to paragraphs.
+  /// Paragraph GlobalKeys — recreated whenever the article changes.
   late List<GlobalKey> _paragraphKeys;
 
-  /// The currently displayed article.
-  late Article _article;
-  Article get article => _article;
+  /// Article ID currently reflected by [_paragraphKeys]; used to detect change.
+  String? _keysArticleId;
+
+  /// Last scroll fraction (0–1); updated on every scroll, used for dispose save.
+  double _scrollFraction = 0;
+
+  /// Cached references used in [_bestEffortSaveOnDispose] where ref is unsafe.
+  late ReadingStateRepository _readingStateRepoCache;
+  TtsState? _lastTtsState;
+  ArticleReaderState? _lastReaderState;
+
+  /// Whether the app is currently in the background.
+  bool _isInBackground = false;
+
+  /// Key to access [ArticleContentWidgetState.ensureWordVisible].
+  final _contentKey = GlobalKey<ArticleContentWidgetState>();
+
+  // ── Init / Dispose ──────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scroll = ScrollController();
-    _readingStateRepo = ref.read(readingStateRepositoryProvider);
-    _cacheService = ref.read(articleCacheServiceProvider);
-    _article = widget.article;
-    _isBookmarked = article.isBookmarked;
-    // Initialize GlobalKeys for each paragraph
+    _readingStateRepoCache = ref.read(readingStateRepositoryProvider);
+
+    final article = widget.article;
     _paragraphKeys = List.generate(
       article.paragraphs.length,
       (_) => GlobalKey(),
     );
-    _restorePosition();
-    _cacheService.resetDelaySchedule();
-    _maybeStartCache();
-    // Mark as user-read so this article appears in the recents list
-    // (background-cached articles are NOT marked until the user opens them).
-    // Reload recents AFTER the mark completes so the list is always up-to-date
-    // even when arriving via pushReplacement (where the caller's load() fires
-    // before this screen's initState has a chance to mark the article read).
-    ref.read(articleRepositoryProvider).markArticleRead(article.id).then((_) {
-      if (mounted) ref.read(recentArticlesProvider.notifier).load();
+    _keysArticleId = article.id;
+
+    // Defer to post-frame: modifying provider state during initState (which runs
+    // inside the widget-tree build pass) throws a Riverpod assertion error.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(articleReaderProvider.notifier)
+          .initWithArticle(article, resetProgress: widget.resetProgress);
     });
   }
 
-  Future<void> _maybeStartCache() async {
-    final settings = ref.read(settingsProvider).valueOrNull;
-    if (settings == null || !settings.cachingEnabled) return;
-    await _cacheService.startFromArticle(article);
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _bestEffortSaveOnDispose();
+    _scroll.dispose();
+    super.dispose();
   }
 
-  Future<void> _restorePosition() async {
-    // When navigating prev/next we always start from the beginning.
-    if (widget.resetProgress) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoPlay());
-      return;
-    }
-    final repo = ref.read(articleRepositoryProvider);
-    final isResumable = await repo.isLastUncompletedRead(article.id);
-    if (!mounted) return;
-    if (!isResumable) {
-      // Not the last incomplete read — start fresh.
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoPlay());
-      return;
-    }
-    final readingStateRepo = _readingStateRepo;
-    final saved = await readingStateRepo.getReadingState(article.id);
-    if (!mounted) return;
-    if (saved != null) {
-      setState(() {
-        _highlightedIndex = saved.lastReadIndex;
-        _savedWordOffset = saved.lastWordOffset;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients && saved.scrollPosition > 0) {
-          final max = _scroll.position.maxScrollExtent;
-          _scroll.jumpTo(saved.scrollPosition * max);
-        }
-        _maybeAutoPlay(startIndex: saved.lastReadIndex);
-      });
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoPlay());
+  /// Save reading state using only cached values because ref.read() is unsafe
+  /// once the element is being torn down.
+  void _bestEffortSaveOnDispose() {
+    final readerState = _lastReaderState;
+    if (readerState == null) return;
+    final article = readerState.article;
+    if (article == null) return;
+    final ttsState = _lastTtsState;
+    _readingStateRepoCache.saveReadingState(
+      ReadingState(
+        articleId: article.id,
+        scrollPosition: _scrollFraction,
+        lastReadIndex:
+            (ttsState?.isActive ?? false)
+                ? ttsState!.currentIndex
+                : readerState.highlightedIndex,
+        lastWordOffset:
+            (ttsState?.isActive ?? false)
+                ? ttsState!.wordStart.clamp(0, 9999)
+                : readerState.savedWordOffset,
+      ),
+    );
+  }
+
+  // ── App lifecycle (delegated to notifier) ───────────────────────────────────
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final notifier = ref.read(articleReaderProvider.notifier);
+    if (state == AppLifecycleState.resumed) {
+      _isInBackground = false;
+      notifier.onAppResumed();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _isInBackground = true;
+      final cacheInBackground =
+          ref.read(settingsProvider).valueOrNull?.cacheInBackground ?? false;
+      notifier.onAppPaused(cacheInBackground: cacheInBackground);
     }
   }
 
-  void _maybeAutoPlay({int startIndex = 0}) {
-    if (!mounted || _autoPlayScheduled) return;
-    final autoRead = ref.read(settingsProvider).valueOrNull?.autoRead ?? true;
-    if (!autoRead) return;
-    _autoPlayScheduled = true;
-
-    // TTS is already playing new content queued via transitionToContent —
-    // no need to (re)start it.
-    if (ref.read(ttsProvider).isActive) return;
-
-    ref
-        .read(ttsProvider.notifier)
-        .play(
-          article.paragraphs,
-          startIndex: startIndex,
-          language: article.language,
-          articleTitle: article.title,
-        );
-  }
+  // ── Scroll helpers ──────────────────────────────────────────────────────────
 
   void _onScroll() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(seconds: 2), _saveState);
+    if (_scroll.hasClients && _scroll.position.maxScrollExtent > 0) {
+      _scrollFraction = _scroll.offset / _scroll.position.maxScrollExtent;
+    }
+    ref
+        .read(articleReaderProvider.notifier)
+        .saveState(scrollFraction: _scrollFraction);
 
-    // Check if we should show scroll-to-top FAB
-    // Show when scrolled 1.5x screen height
     if (_scroll.hasClients) {
       final screenHeight = MediaQuery.of(context).size.height;
-      final showThreshold = screenHeight * 1.5;
-      final shouldShow = _scroll.offset > showThreshold;
-
-      if (shouldShow != _showScrollToTop) {
-        setState(() => _showScrollToTop = shouldShow);
-      }
+      ref
+          .read(articleReaderProvider.notifier)
+          .setScrollTopVisibility(_scroll.offset > screenHeight * 1.5);
     }
   }
 
@@ -175,144 +155,35 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     }
   }
 
-  Future<void> _navigateToUrl(
-    String? url, {
-    bool resetProgress = false,
-    bool markCurrentCompleted = false,
-  }) async {
-    if (url == null || url.isEmpty) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final repo = ref.read(articleRepositoryProvider);
-      if (markCurrentCompleted) await repo.markArticleCompleted(article.id);
-      final newArticle = await repo.fetchArticle(url);
-      if (!mounted) return;
-
-      // Transition without stopping — keeps audio focus and notification alive.
-      ref
-          .read(ttsProvider.notifier)
-          .transitionToContent(
-            newArticle.paragraphs,
-            language: newArticle.language,
-            articleTitle: newArticle.title,
-          );
-      await _saveState();
-      await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
-      ref.read(recentArticlesProvider.notifier).load();
-
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder:
-              (_) => ReaderScreen(
-                article: newArticle,
-                resetProgress: resetProgress,
-              ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load: $e')));
-    }
-  }
-
-  Future<void> _refreshPage() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final repo = ref.read(articleRepositoryProvider);
-      final newArticle = await repo.fetchArticle(article.url);
-      if (!mounted) return;
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => ReaderScreen(article: newArticle)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to refresh: $e')));
-    }
-  }
-
-  Future<void> _saveState() async {
-    // Never call ref.read() once dispose() has started — the element may have
-    // been deactivated already even though mounted is still true.
-    final useRef = mounted && !_disposing;
-    final ttsState = useRef ? ref.read(ttsProvider) : _lastTtsState;
-    final repo =
-        useRef ? ref.read(readingStateRepositoryProvider) : _readingStateRepo;
-    double scrollFraction = 0;
-    if (_scroll.hasClients && _scroll.position.maxScrollExtent > 0) {
-      scrollFraction = _scroll.offset / _scroll.position.maxScrollExtent;
-    }
-    final rs = ReadingState(
-      articleId: article.id,
-      scrollPosition: scrollFraction,
-      lastReadIndex:
-          (ttsState?.isActive ?? false)
-              ? ttsState!.currentIndex
-              : _highlightedIndex,
-      lastWordOffset:
-          (ttsState?.isActive ?? false)
-              ? ttsState!.wordStart.clamp(0, 9999)
-              : _savedWordOffset,
-    );
-    await repo.saveReadingState(rs);
-  }
-
-  void _onParagraphChanged(int index) {
-    setState(() {
-      _highlightedIndex = index;
-      _savedWordOffset = 0;
-    });
-    _scrollToParagraph(index);
-  }
-
   void _scrollToParagraph(int index) {
-    if (!_scroll.hasClients) return;
-    final paragraphs = article.paragraphs;
-    if (paragraphs.isEmpty || index < 0 || index >= paragraphs.length) return;
-
+    if (!_scroll.hasClients || index < 0 || index >= _paragraphKeys.length) {
+      return;
+    }
     final key = _paragraphKeys[index];
     if (key.currentContext == null) return;
-
     Scrollable.ensureVisible(
       key.currentContext!,
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOut,
-      alignment:
-          0.3, // Position paragraph at 30% from top for better visibility
+      alignment: 0.3,
     );
   }
 
-  /// Called when user taps a paragraph. Starts TTS from the beginning of that paragraph.
+  // ── User interactions ───────────────────────────────────────────────────────
+
   void _onParagraphTapped(int paragraphIndex) {
-    final notifier = ref.read(ttsProvider.notifier);
+    final ttsNotifier = ref.read(ttsProvider.notifier);
+    ttsNotifier.cancelScheduledPlay();
+    if (ref.read(ttsProvider).isActive) ttsNotifier.stop();
 
-    // Cancel any pending scheduled play
-    notifier.cancelScheduledPlay();
-
-    // Stop current TTS if active
-    if (ref.read(ttsProvider).isActive) {
-      notifier.stop();
-    }
-
-    // Immediate visual feedback
-    setState(() {
-      _highlightedIndex = paragraphIndex;
-      _savedWordOffset = 0;
-    });
+    ref
+        .read(articleReaderProvider.notifier)
+        .setHighlightedIndex(paragraphIndex);
     _scrollToParagraph(paragraphIndex);
 
-    // Schedule TTS start after 2s from beginning of paragraph
-    notifier.schedulePlayFromWord(
+    final article = ref.read(articleReaderProvider).article;
+    if (article == null) return;
+    ttsNotifier.schedulePlayFromWord(
       paragraphs: article.paragraphs,
       paragraphIndex: paragraphIndex,
       charOffset: 0,
@@ -321,8 +192,40 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     );
   }
 
-  /// Shows a dialog that lets the user edit the current URL and navigate there.
-  Future<void> _showUrlEditor() async {
+  Future<void> _navigateToUrl(
+    String? url, {
+    bool resetProgress = false,
+    bool markCurrentCompleted = false,
+  }) async {
+    if (url == null || url.isEmpty) return;
+    try {
+      await ref
+          .read(articleReaderProvider.notifier)
+          .loadUrl(
+            url,
+            resetProgress: resetProgress,
+            markCurrentCompleted: markCurrentCompleted,
+          );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load: $e')));
+    }
+  }
+
+  Future<void> _refreshPage() async {
+    try {
+      await ref.read(articleReaderProvider.notifier).refreshCurrentArticle();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to refresh: $e')));
+    }
+  }
+
+  Future<void> _showUrlEditor(Article article) async {
     final controller = TextEditingController(text: article.url);
     final newUrl = await showDialog<String>(
       context: context,
@@ -349,8 +252,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     icon: const Icon(Icons.share),
                     tooltip: 'Share URL',
                     onPressed: () {
-                      final url = controller.text.trim();
-                      Share.share(url);
+                      Share.share(controller.text.trim());
                       Navigator.of(ctx).pop();
                     },
                   ),
@@ -379,15 +281,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             ],
           ),
     );
-    // Defer dispose until after the dialog close animation completes.
-    // Disposing immediately causes "TextEditingController used after dispose"
-    // because the animation system still references the controller.
+    // Defer dispose until after dialog close animation to avoid
+    // "TextEditingController used after dispose" errors.
     WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
 
     if (newUrl == null || newUrl.isEmpty || newUrl == article.url) return;
     if (!mounted) return;
 
-    // Normalise URL
     var url = newUrl;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://$url';
@@ -400,12 +300,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       return;
     }
 
-    // Transition without stopping — keeps audio focus and notification alive.
-    // (stop() was here before; now TTS continues playing until the article loads)
-    await _saveState();
-
-    if (!mounted) return;
-    final repo = ref.read(articleRepositoryProvider);
     final loadingSnack = ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Loading…'),
@@ -413,22 +307,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       ),
     );
     try {
-      final newArticle = await repo.fetchArticle(url);
-      if (!mounted) return;
-      ref
-          .read(ttsProvider.notifier)
-          .transitionToContent(
-            newArticle.paragraphs,
-            language: newArticle.language,
-            articleTitle: newArticle.title,
-          );
-      await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
-      ref.read(recentArticlesProvider.notifier).load();
+      await ref.read(articleReaderProvider.notifier).loadUrl(url);
       loadingSnack.close();
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => ReaderScreen(article: newArticle)),
-      );
     } catch (e) {
       if (!mounted) return;
       loadingSnack.close();
@@ -438,185 +318,97 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     }
   }
 
-  void _startAutoNextCountdown() {
-    if (!mounted || _countdownTimer != null) return;
-    final settings = ref.read(settingsProvider).valueOrNull;
-    if (settings == null || !settings.autoNext) return;
-    if (article.nextUrl == null) return;
-
-    setState(() {
-      _autoNextCountdown = 5;
-      _showScrollToTop = false;
-    });
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      final next = (_autoNextCountdown ?? 0) - 1;
-      if (next <= 0) {
-        t.cancel();
-        setState(() => _autoNextCountdown = null);
-        _navigateToUrlAutoNext();
-      } else {
-        setState(() => _autoNextCountdown = next);
-      }
-    });
-  }
-
-  void _cancelAutoNext() {
-    _countdownTimer?.cancel();
-    _countdownTimer = null;
-    if (mounted) setState(() => _autoNextCountdown = null);
-  }
-
-  Future<void> _navigateToUrlAutoNext({String? url}) async {
-    final targetUrl = url ?? article.nextUrl;
-    if (targetUrl == null) return;
-    setState(() => _isLoading = true);
-    try {
-      final repo = ref.read(articleRepositoryProvider);
-      await repo.markArticleCompleted(article.id);
-      final newArticle = await repo.fetchArticle(targetUrl);
-      if (!mounted) return;
-
-      _navigateWithArticle(newArticle, resetProgress: true);
-    } catch (e) {
-      // error (e.g. DNS unavailable right after screen turns off).
-      final msg = e.toString();
-      final isNetworkError =
-          msg.contains('SocketException') ||
-          msg.contains('Failed host lookup') ||
-          msg.contains('NetworkException') ||
-          msg.contains('ClientException');
-      if (mounted) setState(() => _isLoading = false);
-      if (isNetworkError) {
-        // Keep retrying in background every 15 s while the process is alive
-        // (kept alive by the audio_service foreground service).
-        _pendingAutoNextUrl = targetUrl;
-        _backgroundRetryTimer?.cancel();
-        _backgroundRetryTimer = Timer.periodic(
-          const Duration(seconds: 15),
-          (_) => _retryAutoNextInBackground(),
-        );
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Failed to load: $e')));
-        }
-      }
-    }
-  }
-
-  Future<void> _retryAutoNextInBackground() async {
-    if (_pendingAutoNextUrl == null || !mounted) {
-      _backgroundRetryTimer?.cancel();
-      _backgroundRetryTimer = null;
-      return;
-    }
-    final targetUrl = _pendingAutoNextUrl!;
-    try {
-      final repo = ref.read(articleRepositoryProvider);
-      final newArticle = await repo.fetchArticle(targetUrl);
-      if (!mounted) return;
-      // Success — cancel the retry timer.
-      _backgroundRetryTimer?.cancel();
-      _backgroundRetryTimer = null;
-      _pendingAutoNextUrl = null;
-
-      _navigateWithArticle(newArticle, resetProgress: true);
-    } catch (_) {
-      // Still failing — keep waiting, timer will fire again.
-    }
-  }
-
-  void _navigateWithArticle(Article newArticle, {bool resetProgress = false}) {
-    if (!mounted) return;
-    // Queue new content without stopping — keeps audio focus held in background.
-    ref
-        .read(ttsProvider.notifier)
-        .transitionToContent(
-          newArticle.paragraphs,
-          language: newArticle.language,
-          articleTitle: newArticle.title,
-        );
-    _saveState();
-    ref.read(articleRepositoryProvider).markArticleCompleted(article.id);
-    ref.read(settingsRepositoryProvider).setLastArticleUrl(newArticle.url);
-    ref.read(recentArticlesProvider.notifier).load();
-
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder:
-            (_) =>
-                ReaderScreen(article: newArticle, resetProgress: resetProgress),
-      ),
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      final lifecycle = WidgetsBinding.instance.lifecycleState;
-      final isBackground =
-          lifecycle != null && lifecycle != AppLifecycleState.resumed;
-      if (!isBackground) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Automatically continued to next page'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    });
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _cacheService.resume();
-      // Cancel background retry — we're back in the foreground.
-      _backgroundRetryTimer?.cancel();
-      _backgroundRetryTimer = null;
-
-      if (_pendingAutoNextUrl != null) {
-        // Retry never succeeded; try immediately now that we're foreground.
-        final url = _pendingAutoNextUrl!;
-        _pendingAutoNextUrl = null;
-        _navigateToUrlAutoNext(url: url);
-      }
-    } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      final settings = ref.read(settingsProvider).valueOrNull;
-      final allowBackground = settings?.cacheInBackground ?? false;
-      if (!allowBackground) {
-        _cacheService.pause();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _disposing = true;
-    _saveTimer?.cancel();
-    _countdownTimer?.cancel();
-    _backgroundRetryTimer?.cancel();
-    // Fire-and-forget save on dispose — uses cached values because ref is
-    // no longer safe to use after the element was deactivated.
-    _saveState();
-    _scroll.dispose();
-    super.dispose();
-  }
+  // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final readerState = ref.watch(articleReaderProvider);
     final ttsState = ref.watch(ttsProvider);
-    _lastTtsState = ttsState; // keep cached for use in dispose
+
+    // Cache for dispose-time best-effort save.
+    _lastReaderState = readerState;
+    _lastTtsState = ttsState;
+
+    // ── React to article changes: regenerate paragraph keys ──────────────────
+    ref.listen(articleReaderProvider.select((s) => s.article?.id), (
+      prevId,
+      nextId,
+    ) {
+      if (nextId == null || nextId == _keysArticleId) return;
+      final article = ref.read(articleReaderProvider).article!;
+      setState(() {
+        _paragraphKeys = List.generate(
+          article.paragraphs.length,
+          (_) => GlobalKey(),
+        );
+        _keysArticleId = nextId;
+      });
+    });
+
+    // ── Restore scroll position when notifier signals it ─────────────────────
+    ref.listen(articleReaderProvider.select((s) => s.savedScrollPosition), (
+      _,
+      next,
+    ) {
+      if (next == null) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) {
+          final max = _scroll.position.maxScrollExtent;
+          _scroll.jumpTo(next > 0 && max > 0 ? next * max : 0);
+        }
+        ref.read(articleReaderProvider.notifier).clearSavedScrollPosition();
+      });
+    });
+
+    // ── Scroll to paragraph when highlighted index changes ───────────────────
+    // When TTS is playing, skip paragraph-level scroll — the word-level
+    // ensureWordVisible listener fires immediately after and scrolls directly
+    // to the highlighted word, avoiding a double-animation (scroll up to
+    // paragraph top, then scroll down to word).
+    ref.listen(articleReaderProvider.select((s) => s.highlightedIndex), (
+      prev,
+      next,
+    ) {
+      if (prev != null && prev != next && !ref.read(ttsProvider).isPlaying) {
+        _scrollToParagraph(next);
+      }
+    });
+
+    // ── Ensure the active TTS word stays inside the viewport ─────────────────
+    // Fires only when playing; selects -1 when paused to suppress no-op calls.
+    ref.listen(ttsProvider.select((s) => s.isPlaying ? s.wordStart : -1), (
+      _,
+      next,
+    ) {
+      if (next >= 0) _contentKey.currentState?.ensureWordVisible();
+    });
+
+    // ── Show "auto-continued" snackbar (one-shot) ────────────────────────────
+    // ref.listen(articleReaderProvider.select((s) => s.showAutoNextSnackbar), (
+    //   _,
+    //   show,
+    // ) {
+    //   if (!show || _isInBackground) return;
+    //   ref.read(articleReaderProvider.notifier).clearAutoNextSnackbar();
+    //   WidgetsBinding.instance.addPostFrameCallback((_) {
+    //     if (!mounted) return;
+    //     ScaffoldMessenger.of(context).showSnackBar(
+    //       const SnackBar(
+    //         content: Text('Automatically continued to next page'),
+    //         duration: Duration(seconds: 3),
+    //       ),
+    //     );
+    //   });
+    // });
+
+    final article = readerState.article;
+    if (article == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final settingsAsync = ref.watch(settingsProvider);
-    final fontSize = settingsAsync.valueOrNull?.fontSize ?? 18.0;
     final settingsVal = settingsAsync.valueOrNull;
+    final fontSize = settingsVal?.fontSize ?? 18.0;
     final paragraphHighlightStyle =
         settingsVal != null
             ? HighlightStyle.fromSettings(
@@ -633,49 +425,30 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               decoration: settingsVal.wordHighlightDecoration,
             )
             : HighlightStyle.defaultWord;
+
     final paragraphs = article.paragraphs;
-
-    // Keep _highlightedIndex in sync with TTS paragraph changes
-    ref.listen(ttsProvider, (prev, next) {
-      if (next.isActive && next.currentIndex != _highlightedIndex) {
-        _onParagraphChanged(next.currentIndex);
-      }
-      // Start auto-next countdown as soon as the last paragraph is dispatched
-      // to the TTS engine (rather than waiting for it to finish playing).
-      final lifecycle = WidgetsBinding.instance.lifecycleState;
-      final isBackground =
-          lifecycle != null && lifecycle != AppLifecycleState.resumed;
-
-      if (prev != null) {
-        if (isBackground &&
-            next.isActive &&
-            next.total > 0 &&
-            next.currentIndex == next.total - 1 &&
-            prev.currentIndex != next.currentIndex) {
-          // Screen is off or app is backgrounded — skip the countdown and
-          // navigate immediately so audio continues without interruption.
-          _navigateToUrlAutoNext(url: article.nextUrl);
-        } else if (!isBackground &&
-            prev.status != TtsStatus.idle &&
-            next.status == TtsStatus.idle) {
-          _startAutoNextCountdown();
-        }
-      }
-    });
+    final isLoading = readerState.isLoading;
+    final isBookmarked = readerState.isBookmarked;
+    final showTts = readerState.showTts;
+    final showScrollToTop = readerState.showScrollToTop;
+    final autoNextCountdown = readerState.autoNextCountdown;
+    final highlightedIndex = readerState.highlightedIndex;
+    final savedWordOffset = readerState.savedWordOffset;
 
     return PopScope(
       onPopInvokedWithResult: (didPop, __) {
         if (didPop) {
-          _cancelAutoNext();
+          ref.read(articleReaderProvider.notifier).cancelAutoNext();
           ref.read(ttsProvider.notifier).stop();
         }
-        _saveState();
+        ref
+            .read(articleReaderProvider.notifier)
+            .saveState(scrollFraction: _scrollFraction);
       },
       child: Scaffold(
         appBar: AppBar(
-          // Tapping the title opens URL editor
           title: GestureDetector(
-            onTap: _showUrlEditor,
+            onTap: () => _showUrlEditor(article),
             child: Row(
               children: [
                 Expanded(
@@ -697,35 +470,31 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             ),
           ),
           actions: [
-            Consumer(
-              builder:
-                  (_, ref, __) => IconButton(
-                    icon: Icon(
-                      _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                      color: _isBookmarked ? Colors.amber : null,
-                    ),
-                    tooltip: _isBookmarked ? 'Remove bookmark' : 'Bookmark',
-                    onPressed: () async {
-                      setState(() => _isBookmarked = !_isBookmarked);
-                      await ref
-                          .read(articleRepositoryProvider)
-                          .toggleBookmark(article.id);
-                      ref.read(bookmarksProvider.notifier).load();
-                    },
-                  ),
+            IconButton(
+              icon: Icon(
+                isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                color: isBookmarked ? Colors.amber : null,
+              ),
+              tooltip: isBookmarked ? 'Remove bookmark' : 'Bookmark',
+              onPressed:
+                  () =>
+                      ref.read(articleReaderProvider.notifier).toggleBookmark(),
             ),
             IconButton(
               icon: Icon(
-                _showTts
+                showTts
                     ? Icons.record_voice_over
                     : Icons.record_voice_over_outlined,
               ),
               tooltip: 'Toggle TTS bar',
-              onPressed: () => setState(() => _showTts = !_showTts),
+              onPressed:
+                  () => ref
+                      .read(articleReaderProvider.notifier)
+                      .setShowTts(!showTts),
             ),
           ],
           bottom:
-              _isLoading
+              isLoading
                   ? PreferredSize(
                     preferredSize: const Size.fromHeight(3),
                     child: LinearProgressIndicator(
@@ -738,8 +507,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
         ),
         body: Column(
           children: [
-            // Navigation buttons (top) — removed from fixed position;
-            // rendered inside the scroll view below.
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refreshPage,
@@ -756,7 +523,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Navigation buttons (top) — scrolls with content
+                          // Navigation buttons (top)
                           if (article.prevUrl != null ||
                               article.nextUrl != null ||
                               article.homeUrl != null) ...[
@@ -771,7 +538,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                     if (article.prevUrl != null)
                                       ElevatedButton.icon(
                                         onPressed:
-                                            _isLoading
+                                            isLoading
                                                 ? null
                                                 : () => _navigateToUrl(
                                                   article.prevUrl,
@@ -783,7 +550,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                     if (article.homeUrl != null)
                                       ElevatedButton.icon(
                                         onPressed:
-                                            _isLoading
+                                            isLoading
                                                 ? null
                                                 : () => _navigateToUrl(
                                                   article.homeUrl,
@@ -794,7 +561,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                     if (article.nextUrl != null)
                                       ElevatedButton.icon(
                                         onPressed:
-                                            _isLoading
+                                            isLoading
                                                 ? null
                                                 : () => _navigateToUrl(
                                                   article.nextUrl,
@@ -828,12 +595,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                           ],
                           const SizedBox(height: 32),
                           ArticleContentWidget(
+                            key: _contentKey,
                             paragraphs: paragraphs,
                             fontSize: fontSize,
                             highlightedIndex:
                                 ttsState.isActive
                                     ? ttsState.currentIndex
-                                    : _highlightedIndex,
+                                    : highlightedIndex,
                             wordStart:
                                 ttsState.isPlaying ? ttsState.wordStart : -1,
                             wordEnd: ttsState.isPlaying ? ttsState.wordEnd : -1,
@@ -853,10 +621,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                 alignment: WrapAlignment.center,
                                 children: [
                                   if (article.prevUrl != null &&
-                                      _autoNextCountdown == null)
+                                      autoNextCountdown == null)
                                     ElevatedButton.icon(
                                       onPressed:
-                                          _isLoading
+                                          isLoading
                                               ? null
                                               : () => _navigateToUrl(
                                                 article.prevUrl,
@@ -866,10 +634,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                       label: const Text('Previous'),
                                     ),
                                   if (article.homeUrl != null &&
-                                      _autoNextCountdown == null)
+                                      autoNextCountdown == null)
                                     ElevatedButton.icon(
                                       onPressed:
-                                          _isLoading
+                                          isLoading
                                               ? null
                                               : () => _navigateToUrl(
                                                 article.homeUrl,
@@ -878,13 +646,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                       label: const Text('Home'),
                                     ),
                                   if (article.nextUrl != null)
-                                    if (_autoNextCountdown != null)
+                                    if (autoNextCountdown != null)
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           FilledButton.icon(
                                             onPressed:
-                                                _isLoading
+                                                isLoading
                                                     ? null
                                                     : () => _navigateToUrl(
                                                       article.nextUrl,
@@ -896,24 +664,30 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                               Icons.chevron_right,
                                             ),
                                             label: Text(
-                                              'Next ($_autoNextCountdown)',
+                                              'Next ($autoNextCountdown)',
                                             ),
                                           ),
                                           const SizedBox(width: 8),
                                           FilledButton.icon(
                                             onPressed:
-                                                _isLoading
+                                                isLoading
                                                     ? null
-                                                    : () => _cancelAutoNext(),
+                                                    : () =>
+                                                        ref
+                                                            .read(
+                                                              articleReaderProvider
+                                                                  .notifier,
+                                                            )
+                                                            .cancelAutoNext(),
                                             icon: const Icon(Icons.close),
-                                            label: Text('Stop'),
+                                            label: const Text('Stop'),
                                           ),
                                         ],
                                       )
                                     else
                                       ElevatedButton.icon(
                                         onPressed:
-                                            _isLoading
+                                            isLoading
                                                 ? null
                                                 : () => _navigateToUrl(
                                                   article.nextUrl,
@@ -933,21 +707,24 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 ),
               ),
             ),
-            if (_showTts)
+            if (showTts)
               TtsControlBar(
                 paragraphs: paragraphs,
                 articleLanguage: article.language,
                 articleTitle: article.title,
-                startIndex: _highlightedIndex,
-                startWordOffset: _savedWordOffset,
-                onParagraphChanged: _onParagraphChanged,
+                startIndex: highlightedIndex,
+                startWordOffset: savedWordOffset,
+                onParagraphChanged:
+                    ref
+                        .read(articleReaderProvider.notifier)
+                        .setHighlightedIndex,
               ),
           ],
         ),
         floatingActionButton:
-            _showScrollToTop
+            showScrollToTop
                 ? Padding(
-                  padding: EdgeInsets.only(bottom: _showTts ? 50 : 0),
+                  padding: EdgeInsets.only(bottom: showTts ? 50 : 0),
                   child: Opacity(
                     opacity: 0.6,
                     child: FloatingActionButton(

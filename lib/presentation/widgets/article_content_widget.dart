@@ -89,10 +89,70 @@ class ArticleContentWidget extends StatefulWidget {
   });
 
   @override
-  State<ArticleContentWidget> createState() => _ArticleContentWidgetState();
+  ArticleContentWidgetState createState() => ArticleContentWidgetState();
 }
 
-class _ArticleContentWidgetState extends State<ArticleContentWidget> {
+class ArticleContentWidgetState extends State<ArticleContentWidget> {
+  /// Stable key placed on the section widget that contains the active TTS word.
+  /// Allows [ensureWordVisible] to scroll exactly to the right sub-section
+  /// even when a paragraph is taller than the viewport.
+  final GlobalKey _wordSectionKey = GlobalKey();
+
+  /// Approximate character count per rendered section when splitting a long
+  /// paragraph for word-level scrollability.
+  static const int _kSectionLength = 350;
+
+  /// Split [text] into contiguous (start, end) index pairs, each at most
+  /// [_kSectionLength] characters, breaking only at word boundaries.
+  static List<(int, int)> _computeSections(String text) {
+    if (text.length <= _kSectionLength) return [(0, text.length)];
+    final sections = <(int, int)>[];
+    int start = 0;
+    while (start < text.length) {
+      int end = (start + _kSectionLength).clamp(start, text.length);
+      if (end < text.length) {
+        // Snap to the nearest sentence delimiter before [end].
+        final delimiterIdx = _findSentenceDelimiterBefore(text, end, start);
+        if (delimiterIdx > start) {
+          end = delimiterIdx + 1;
+          while (end < text.length && text[end] == ' ') {
+            end += 1;
+          }
+        } else {
+          // Fallback to the nearest word boundary before [end].
+          final spaceIdx = text.lastIndexOf(' ', end);
+          if (spaceIdx > start) end = spaceIdx + 1;
+        }
+      }
+      sections.add((start, end));
+      start = end;
+    }
+    return sections;
+  }
+
+  static int _findSentenceDelimiterBefore(String text, int end, int start) {
+    for (int i = end - 1; i >= start; i--) {
+      final char = text[i];
+      if (char == '.' || char == '!' || char == '?') {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /// Scrolls the section containing the active TTS word into the viewport.
+  /// No-op when the section is already visible or when TTS is not active.
+  void ensureWordVisible() {
+    final ctx = _wordSectionKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      alignment: 0.5,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
@@ -142,24 +202,76 @@ class _ArticleContentWidgetState extends State<ArticleContentWidget> {
           final safeStart = widget.wordStart.clamp(0, displayText.length);
           final safeEnd = widget.wordEnd.clamp(safeStart, displayText.length);
           final wordStyle = widget.wordHighlightStyle;
-          textWidget = Text.rich(
-            TextSpan(
-              style: bodyStyle,
-              children: [
-                TextSpan(text: displayText.substring(0, safeStart)),
-                TextSpan(
-                  text: displayText.substring(safeStart, safeEnd),
-                  style: bodyStyle?.copyWith(
-                    color: wordStyle.color,
-                    backgroundColor: wordStyle.backgroundColor,
-                    decoration: wordStyle.decoration,
-                    decorationColor: wordStyle.color,
-                  ),
-                ),
-                TextSpan(text: displayText.substring(safeEnd)),
-              ],
-            ),
+
+          // Split the paragraph into sections so the active word can always
+          // be scrolled into view via [ensureWordVisible], even when the
+          // paragraph is taller than the viewport.
+          final sections = _computeSections(displayText);
+          final wordSectionIdx = sections.indexWhere(
+            (s) => safeStart >= s.$1 && safeStart < s.$2,
           );
+
+          if (wordSectionIdx >= 0) {
+            textWidget = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: List.generate(sections.length, (sIdx) {
+                final (sStart, sEnd) = sections[sIdx];
+                final sText = displayText.substring(sStart, sEnd);
+                final isWordSection = sIdx == wordSectionIdx;
+
+                Widget tw;
+                if (isWordSection) {
+                  final ls = (safeStart - sStart).clamp(0, sText.length);
+                  final le = (safeEnd - sStart).clamp(ls, sText.length);
+                  tw = Text.rich(
+                    TextSpan(
+                      style: bodyStyle,
+                      children: [
+                        if (ls > 0) TextSpan(text: sText.substring(0, ls)),
+                        TextSpan(
+                          text: sText.substring(ls, le),
+                          style: bodyStyle?.copyWith(
+                            color: wordStyle.color,
+                            backgroundColor: wordStyle.backgroundColor,
+                            decoration: wordStyle.decoration,
+                            decorationColor: wordStyle.color,
+                          ),
+                        ),
+                        if (le < sText.length)
+                          TextSpan(text: sText.substring(le)),
+                      ],
+                    ),
+                  );
+                } else {
+                  tw = Text(sText, style: bodyStyle);
+                }
+
+                return isWordSection
+                    ? KeyedSubtree(key: _wordSectionKey, child: tw)
+                    : tw;
+              }),
+            );
+          } else {
+            // Fallback: render as a single rich text (original behaviour).
+            textWidget = Text.rich(
+              TextSpan(
+                style: bodyStyle,
+                children: [
+                  TextSpan(text: displayText.substring(0, safeStart)),
+                  TextSpan(
+                    text: displayText.substring(safeStart, safeEnd),
+                    style: bodyStyle?.copyWith(
+                      color: wordStyle.color,
+                      backgroundColor: wordStyle.backgroundColor,
+                      decoration: wordStyle.decoration,
+                      decorationColor: wordStyle.color,
+                    ),
+                  ),
+                  TextSpan(text: displayText.substring(safeEnd)),
+                ],
+              ),
+            );
+          }
         } else {
           textWidget = Text(
             displayText,

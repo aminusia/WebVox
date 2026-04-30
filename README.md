@@ -56,6 +56,14 @@ WebReader strips the clutter from any web article and reads it aloud with word-b
 
    The signed APK will be output to `build/app/outputs/flutter-apk/`.
 
+5. **Build a release APK and prepare a GitHub release package**
+
+   ```bash
+   ./scripts/build-release.sh
+   ```
+
+   This bumps the build number in `pubspec.yaml`, builds the APK, and copies it to `dist/` as a versioned artifact plus `web_reader-latest.apk`.
+
 > **App icon** — the launcher icon is generated from `assets/appicon.png` via `flutter_launcher_icons`. Run `dart run flutter_launcher_icons` to regenerate it after changing the source image.
 
 ---
@@ -108,3 +116,16 @@ Contributions are welcome. Please:
 5. Describe the motivation and approach clearly in the PR description
 
 For significant changes, open an issue first to discuss the proposal before investing time in an implementation.
+
+---
+
+## License
+This project is licensed under the MIT License.
+
+---
+
+## Trademark Notice
+The name "WebReader" and the WebReader logo are trademarks of the author.
+You may not use the name or branding for your own distributions without permission.
+
+You are free to fork and modify the code, but must rename your version.
