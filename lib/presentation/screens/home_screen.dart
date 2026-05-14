@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_reader/domain/entities/article.dart';
+import 'package:web_reader/domain/entities/settings.dart';
 import 'package:web_reader/domain/entities/title_group.dart';
 import 'package:web_reader/presentation/providers/providers.dart';
 import 'package:web_reader/presentation/screens/reader_screen.dart';
@@ -55,12 +56,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Consider reading done if user reached the last 5 % of the page.
     if (rs.scrollPosition >= 0.95) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Continue where you left off'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   const SnackBar(
+    //     content: Text('Continue where you left off'),
+    //     duration: Duration(seconds: 2),
+    //   ),
+    // );
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => ReaderScreen(article: cached)));
@@ -124,17 +125,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     await ref.read(settingsRepositoryProvider).setLastArticleUrl(article.url);
     if (!mounted) return;
 
-    final readingStateRepo = ref.read(readingStateRepositoryProvider);
-    final readingState = await readingStateRepo.getReadingState(article.id);
+    // final readingStateRepo = ref.read(readingStateRepositoryProvider);
+    // final readingState = await readingStateRepo.getReadingState(article.id);
 
-    if (readingState != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Continue where you left off'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
+    // if (readingState != null && mounted) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(
+    //       content: Text('Continue where you left off'),
+    //       duration: Duration(seconds: 2),
+    //     ),
+    //   );
+    // }
 
     await Navigator.of(
       context,
@@ -226,8 +227,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('WebReader'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/appicon2.png', width: 24, height: 24),
+            const SizedBox(width: 8),
+            const Text(
+              'WebReader',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
         actions: [
+          _ThemeToggleButton(),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'Settings',
@@ -320,6 +332,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       g,
                                       isBookmarks: true,
                                     ),
+                                onDeleteArticle:
+                                    (a) => ref
+                                        .read(bookmarksGroupedProvider.notifier)
+                                        .removeArticle(a.id),
                               ),
                 ),
               ],
@@ -353,33 +369,38 @@ class _UrlInputBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          Stack(
+            alignment: Alignment.center,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  decoration: const InputDecoration(
-                    hintText: 'Paste a URL to read…',
-                    prefixIcon: Icon(Icons.link),
-                    border: OutlineInputBorder(),
-                    isDense: true,
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  hintText: 'Paste new URL to read…',
+                  prefixIcon: const Icon(Icons.link),
+                  // Reserve space so text doesn't slide under the button.
+                  suffixIcon: const SizedBox(width: 88),
+                  border: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(30)),
                   ),
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.go,
-                  onSubmitted: isLoading ? null : onSubmit,
+                  isDense: true,
                 ),
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.go,
+                onSubmitted: isLoading ? null : onSubmit,
               ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: isLoading ? null : () => onSubmit(controller.text),
-                child:
-                    isLoading
-                        ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Text('Open'),
+              Positioned(
+                right: 6,
+                child: FilledButton(
+                  onPressed: isLoading ? null : () => onSubmit(controller.text),
+                  child:
+                      isLoading
+                          ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Text('Open'),
+                ),
               ),
             ],
           ),
@@ -408,6 +429,7 @@ class _GroupedList extends StatelessWidget {
   final void Function(Article) onArticleTap;
   final void Function(TitleGroup) onRenameTitle;
   final void Function(TitleGroup) onDeleteTitle;
+  final void Function(Article)? onDeleteArticle;
 
   const _GroupedList({
     required this.groups,
@@ -416,6 +438,7 @@ class _GroupedList extends StatelessWidget {
     required this.onArticleTap,
     required this.onRenameTitle,
     required this.onDeleteTitle,
+    this.onDeleteArticle,
   });
 
   @override
@@ -431,6 +454,7 @@ class _GroupedList extends StatelessWidget {
           onArticleTap: onArticleTap,
           onRename: () => onRenameTitle(group),
           onDelete: () => onDeleteTitle(group),
+          onDeleteArticle: onDeleteArticle,
         );
       },
     );
@@ -444,6 +468,7 @@ class _TitleAccordion extends StatelessWidget {
   final void Function(Article) onArticleTap;
   final VoidCallback onRename;
   final VoidCallback onDelete;
+  final void Function(Article)? onDeleteArticle;
 
   const _TitleAccordion({
     required this.group,
@@ -452,6 +477,7 @@ class _TitleAccordion extends StatelessWidget {
     required this.onArticleTap,
     required this.onRename,
     required this.onDelete,
+    this.onDeleteArticle,
   });
 
   @override
@@ -482,17 +508,17 @@ class _TitleAccordion extends StatelessWidget {
                     children: [
                       Text(
                         group.titleName,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w400,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         group.websiteDomain,
-                        style: theme.textTheme.bodySmall?.copyWith(
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           color: dimColor,
-                          fontSize: 11,
+                          fontSize: 13,
                         ),
                       ),
                     ],
@@ -522,7 +548,13 @@ class _TitleAccordion extends StatelessWidget {
           firstChild: Column(
             children:
                 group.articles
-                    .map((a) => _ArticleTile(article: a, onTap: onArticleTap))
+                    .map(
+                      (a) => _ArticleTile(
+                        article: a,
+                        onTap: onArticleTap,
+                        onDelete: onDeleteArticle,
+                      ),
+                    )
                     .toList(),
           ),
           secondChild: const SizedBox.shrink(),
@@ -536,8 +568,13 @@ class _TitleAccordion extends StatelessWidget {
 class _ArticleTile extends StatelessWidget {
   final Article article;
   final void Function(Article) onTap;
+  final void Function(Article)? onDelete;
 
-  const _ArticleTile({required this.article, required this.onTap});
+  const _ArticleTile({
+    required this.article,
+    required this.onTap,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -545,7 +582,7 @@ class _ArticleTile extends StatelessWidget {
     return InkWell(
       onTap: () => onTap(article),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(44, 6, 16, 6),
+        padding: const EdgeInsets.fromLTRB(44, 6, 4, 6),
         child: Row(
           children: [
             Icon(
@@ -569,6 +606,13 @@ class _ArticleTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (onDelete != null)
+              IconButton(
+                icon: const Icon(Icons.bookmark_remove_outlined, size: 18),
+                tooltip: 'Remove bookmark',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => onDelete!(article),
+              ),
           ],
         ),
       ),
@@ -603,6 +647,44 @@ class _EmptyState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Theme Toggle ─────────────────────────────────────────────────────────────
+
+class _ThemeToggleButton extends ConsumerWidget {
+  const _ThemeToggleButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settingsAsync = ref.watch(settingsProvider);
+    final pref =
+        settingsAsync.valueOrNull?.themePreference ?? ThemePreference.system;
+
+    final (icon, tooltip) = switch (pref) {
+      ThemePreference.system => (Icons.brightness_auto, 'System theme'),
+      ThemePreference.light => (Icons.light_mode_outlined, 'Light theme'),
+      ThemePreference.dark => (Icons.dark_mode_outlined, 'Dark theme'),
+    };
+
+    return IconButton(
+      icon: Icon(icon),
+      tooltip: tooltip,
+      onPressed:
+          settingsAsync.valueOrNull == null
+              ? null
+              : () {
+                final next = switch (pref) {
+                  ThemePreference.system => ThemePreference.light,
+                  ThemePreference.light => ThemePreference.dark,
+                  ThemePreference.dark => ThemePreference.system,
+                };
+                final updated = settingsAsync.requireValue.copyWith(
+                  themePreference: next,
+                );
+                ref.read(settingsProvider.notifier).update(updated);
+              },
     );
   }
 }

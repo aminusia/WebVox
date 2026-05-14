@@ -221,6 +221,11 @@ class BookmarksGroupedNotifier
     await _repo.updateTitleName(titleId, newName);
     await load();
   }
+
+  Future<void> removeArticle(String articleId) async {
+    await _repo.toggleBookmark(articleId);
+    await load();
+  }
 }
 
 // ─── Current Article Loading ─────────────────────────────────────────────────

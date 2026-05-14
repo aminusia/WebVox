@@ -55,6 +55,12 @@ class ArticleCacheService {
   /// Seed the queue from a newly opened article and start processing.
   /// Also ensures the current article itself is persisted in the local cache.
   Future<void> startFromArticle(Article article) async {
+    // Reset state for the new article.
+    _timer?.cancel();
+    _timer = null;
+    _nextQueue.clear();
+    _fetchesSincePageOpen = 0;
+
     // Save the currently-read article if it hasn't been cached yet.
     if (!article.isCached) {
       try {
@@ -65,7 +71,6 @@ class ArticleCacheService {
       }
     }
 
-    await _loadQueue();
     await _seedFromArticle(article);
     await _saveQueue();
     _started = true;

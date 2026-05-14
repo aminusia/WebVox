@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:web_reader/core/theme/app_theme.dart';
 import 'package:web_reader/domain/entities/article.dart';
 import 'package:web_reader/domain/entities/reading_state.dart';
 import 'package:web_reader/domain/repositories/reading_state_repository.dart';
@@ -479,6 +480,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             : HighlightStyle.defaultWord;
 
     final paragraphs = article.paragraphs;
+
+    // If the paragraph count changed (e.g. article reloaded in place), grow
+    // the key list so it always matches paragraphs.length.
+    if (_paragraphKeys.length != paragraphs.length) {
+      _paragraphKeys = List.generate(paragraphs.length, (_) => GlobalKey());
+    }
+
     final isLoading = readerState.isLoading;
     final isBookmarked = readerState.isBookmarked;
     final showTts = readerState.showTts;
@@ -508,7 +516,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     article.title,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: article.isCached ? Colors.blue : null,
+                      color: article.isCached ? AppColors.primaryColor : null,
                     ),
                   ),
                 ),
@@ -597,7 +605,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                   resetProgress: true,
                                                 ),
                                         icon: const Icon(Icons.chevron_left),
-                                        label: const Text('Previous'),
+                                        label: const Text('Prev'),
                                       ),
                                     if (article.homeUrl != null)
                                       ElevatedButton.icon(
