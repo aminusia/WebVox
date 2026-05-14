@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_reader/core/theme/app_theme.dart';
-import 'package:web_reader/domain/entities/article.dart';
-import 'package:web_reader/domain/entities/reading_state.dart';
-import 'package:web_reader/domain/repositories/reading_state_repository.dart';
-import 'package:web_reader/presentation/providers/article_reader_notifier.dart';
-import 'package:web_reader/presentation/providers/providers.dart';
-import 'package:web_reader/presentation/providers/tts_notifier.dart';
-import 'package:web_reader/presentation/widgets/article_content_widget.dart';
-import 'package:web_reader/presentation/widgets/tts_control_bar.dart';
+import 'package:webreader/core/theme/app_theme.dart';
+import 'package:webreader/domain/entities/article.dart';
+import 'package:webreader/domain/entities/reading_state.dart';
+import 'package:webreader/domain/repositories/reading_state_repository.dart';
+import 'package:webreader/presentation/providers/article_reader_notifier.dart';
+import 'package:webreader/presentation/providers/providers.dart';
+import 'package:webreader/presentation/providers/tts_notifier.dart';
+import 'package:webreader/presentation/widgets/article_content_widget.dart';
+import 'package:webreader/presentation/widgets/tts_control_bar.dart';
 
 class ReaderScreen extends ConsumerStatefulWidget {
   final Article article;
@@ -286,7 +286,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           (ctx) => AlertDialog(
             title: Row(
               children: [
-                const Expanded(child: Text('Open URL')),
+                const Expanded(
+                  child: Text(
+                    'Open URL',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                ),
                 if (controller.text.isNotEmpty)
                   IconButton(
                     icon: const Icon(Icons.copy),
@@ -318,7 +327,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
               textInputAction: TextInputAction.go,
               decoration: const InputDecoration(
                 hintText: 'https://…',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(30)),
+                ),
               ),
               onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
             ),
@@ -533,7 +544,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             IconButton(
               icon: Icon(
                 isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                color: isBookmarked ? Colors.amber : null,
+                color: isBookmarked ? AppColors.titleColor : Colors.white,
               ),
               tooltip: isBookmarked ? 'Remove bookmark' : 'Bookmark',
               onPressed:

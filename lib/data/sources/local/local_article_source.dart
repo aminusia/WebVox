@@ -1,9 +1,9 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
-import 'package:web_reader/core/utils/title_extractor.dart';
-import 'package:web_reader/data/database/app_database.dart';
-import 'package:web_reader/domain/entities/article.dart';
-import 'package:web_reader/domain/entities/title_group.dart';
+import 'package:webreader/core/utils/title_extractor.dart';
+import 'package:webreader/data/database/app_database.dart';
+import 'package:webreader/domain/entities/article.dart';
+import 'package:webreader/domain/entities/title_group.dart';
 
 class LocalArticleSource {
   Future<Database> get _db => AppDatabase.instance.database;

@@ -1,18 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_reader/core/services/article_cache_service.dart';
-import 'package:web_reader/data/repositories/article_repository_impl.dart';
-import 'package:web_reader/data/repositories/reading_state_repository_impl.dart';
-import 'package:web_reader/data/repositories/settings_repository_impl.dart';
-import 'package:web_reader/domain/entities/article.dart';
-import 'package:web_reader/domain/entities/settings.dart';
-import 'package:web_reader/domain/entities/title_group.dart';
-import 'package:web_reader/domain/repositories/article_repository.dart';
-import 'package:web_reader/domain/repositories/reading_state_repository.dart';
-import 'package:web_reader/domain/repositories/settings_repository.dart';
-import 'package:web_reader/presentation/providers/article_reader_notifier.dart';
-import 'package:web_reader/presentation/providers/tts_notifier.dart';
+import 'package:webreader/core/services/article_cache_service.dart';
+import 'package:webreader/data/repositories/article_repository_impl.dart';
+import 'package:webreader/data/repositories/reading_state_repository_impl.dart';
+import 'package:webreader/data/repositories/settings_repository_impl.dart';
+import 'package:webreader/domain/entities/article.dart';
+import 'package:webreader/domain/entities/settings.dart';
+import 'package:webreader/domain/entities/title_group.dart';
+import 'package:webreader/domain/repositories/article_repository.dart';
+import 'package:webreader/domain/repositories/reading_state_repository.dart';
+import 'package:webreader/domain/repositories/settings_repository.dart';
+import 'package:webreader/presentation/providers/article_reader_notifier.dart';
+import 'package:webreader/presentation/providers/tts_notifier.dart';
 
 // ─── Repositories ────────────────────────────────────────────────────────────
 

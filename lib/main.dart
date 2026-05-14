@@ -4,13 +4,13 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
-import 'package:web_reader/core/theme/app_theme.dart';
-import 'package:web_reader/data/database/app_database.dart';
-import 'package:web_reader/domain/entities/settings.dart';
-import 'package:web_reader/presentation/providers/providers.dart';
-import 'package:web_reader/presentation/providers/tts_notifier.dart';
-import 'package:web_reader/presentation/screens/home_screen.dart';
-import 'package:web_reader/presentation/screens/reader_screen.dart';
+import 'package:webreader/core/theme/app_theme.dart';
+import 'package:webreader/data/database/app_database.dart';
+import 'package:webreader/domain/entities/settings.dart';
+import 'package:webreader/presentation/providers/providers.dart';
+import 'package:webreader/presentation/providers/tts_notifier.dart';
+import 'package:webreader/presentation/screens/home_screen.dart';
+import 'package:webreader/presentation/screens/reader_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +47,7 @@ class _AppInitializerState extends State<_AppInitializer> {
       handler = await AudioService.init(
         builder: () => TtsAudioHandler(),
         config: const AudioServiceConfig(
-          androidNotificationChannelId: 'com.webreader.web_reader.tts',
+          androidNotificationChannelId: 'app.alkyo.webreader.tts',
           androidNotificationChannelName: 'WebReader TTS',
           androidNotificationOngoing: false,
           rewindInterval: Duration(seconds: 10),

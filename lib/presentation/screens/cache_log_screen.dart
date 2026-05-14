@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_reader/presentation/providers/providers.dart';
+import 'package:webreader/presentation/providers/providers.dart';
 
 class CacheLogScreen extends ConsumerStatefulWidget {
   const CacheLogScreen({super.key});

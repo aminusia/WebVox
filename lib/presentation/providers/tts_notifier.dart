@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:web_reader/domain/repositories/settings_repository.dart';
+import 'package:webreader/domain/repositories/settings_repository.dart';
 
 // ─── Status ──────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web_reader/core/constants/app_constants.dart';
-import 'package:web_reader/domain/entities/settings.dart';
+import 'package:webreader/core/constants/app_constants.dart';
+import 'package:webreader/domain/entities/settings.dart';
 
 class LocalSettingsSource {
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();

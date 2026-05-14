@@ -1,6 +1,6 @@
-import 'package:web_reader/data/sources/local/local_settings_source.dart';
-import 'package:web_reader/domain/entities/settings.dart';
-import 'package:web_reader/domain/repositories/settings_repository.dart';
+import 'package:webreader/data/sources/local/local_settings_source.dart';
+import 'package:webreader/domain/entities/settings.dart';
+import 'package:webreader/domain/repositories/settings_repository.dart';
 
 class SettingsRepositoryImpl implements SettingsRepository {
   final LocalSettingsSource _source;

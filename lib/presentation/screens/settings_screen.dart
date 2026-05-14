@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:web_reader/core/utils/language_detector.dart';
-import 'package:web_reader/domain/entities/settings.dart';
-import 'package:web_reader/presentation/providers/providers.dart';
-import 'package:web_reader/presentation/screens/cache_log_screen.dart';
+import 'package:webreader/core/utils/language_detector.dart';
+import 'package:webreader/domain/entities/settings.dart';
+import 'package:webreader/presentation/providers/providers.dart';
+import 'package:webreader/presentation/screens/cache_log_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});

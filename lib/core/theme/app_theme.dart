@@ -11,6 +11,9 @@ class AppColors {
   /// Fill color for primary action buttons (FilledButton / ElevatedButton).
   static const Color primaryColor = Color(0xFF5577FF);
 
+  /// Text color for titles.
+  static const Color titleColor = Color(0xFFAA99FF);
+
   /// Foreground color used on top of [barColor] and [primaryColor].
   static const Color onBar = Colors.white;
 }
@@ -28,6 +31,15 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: base,
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.barColor,
+        titleTextStyle: TextStyle(
+          color: AppColors.onBar,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+        ),
+        contentTextStyle: TextStyle(color: AppColors.onBar),
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.barColor,
         foregroundColor: AppColors.onBar,

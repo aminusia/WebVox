@@ -1,8 +1,8 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
-import 'package:web_reader/core/constants/app_constants.dart';
-import 'package:web_reader/core/utils/title_extractor.dart';
+import 'package:webreader/core/constants/app_constants.dart';
+import 'package:webreader/core/utils/title_extractor.dart';
 
 class AppDatabase {
   static AppDatabase? _instance;

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:web_reader/domain/entities/settings.dart';
+import 'package:webreader/domain/entities/settings.dart';
 
 /// Resolved Flutter-level highlight style, converted from [Settings] fields.
 class HighlightStyle {

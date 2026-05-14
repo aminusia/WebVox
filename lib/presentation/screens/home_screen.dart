@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_reader/domain/entities/article.dart';
-import 'package:web_reader/domain/entities/settings.dart';
-import 'package:web_reader/domain/entities/title_group.dart';
-import 'package:web_reader/presentation/providers/providers.dart';
-import 'package:web_reader/presentation/screens/reader_screen.dart';
-import 'package:web_reader/presentation/screens/settings_screen.dart';
+import 'package:webreader/core/theme/app_theme.dart';
+import 'package:webreader/domain/entities/article.dart';
+import 'package:webreader/domain/entities/settings.dart';
+import 'package:webreader/domain/entities/title_group.dart';
+import 'package:webreader/presentation/providers/providers.dart';
+import 'package:webreader/presentation/screens/reader_screen.dart';
+import 'package:webreader/presentation/screens/settings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -152,7 +153,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Rename title'),
+            title: const Text(
+              'Rename title',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: AppColors.primaryColor,
+              ),
+            ),
             content: TextField(
               controller: ctrl,
               autofocus: true,
@@ -225,16 +233,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final recentAsync = ref.watch(recentGroupedProvider);
     final bookmarksAsync = ref.watch(bookmarksGroupedProvider);
 
+    // Show the Get Started page until the user has opened at least one article.
+    if (recentAsync.hasValue && (recentAsync.value?.isEmpty ?? true)) {
+      return _GetStartedPage(
+        controller: _urlController,
+        isLoading: _isLoading,
+        error: _error,
+        onSubmit: _openUrl,
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/appicon2.png', width: 24, height: 24),
+            Image.asset('assets/appicon3.png', width: 24, height: 24),
             const SizedBox(width: 8),
             const Text(
               'WebReader',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: AppColors.titleColor,
+              ),
             ),
           ],
         ),
@@ -646,6 +668,214 @@ class _EmptyState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Get Started page ────────────────────────────────────────────────────────
+
+class _GetStartedPage extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isLoading;
+  final String? error;
+  final void Function(String) onSubmit;
+
+  const _GetStartedPage({
+    required this.controller,
+    required this.isLoading,
+    required this.error,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const titleColor = Color(0xFFF1CAD7);
+    const bodyColor = Color(0xFFFCF1E9);
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            // CSS 223deg ≈ begin at top-right, end at bottom-left
+            begin: Alignment(0.68, -0.73),
+            end: Alignment(-0.68, 0.73),
+            colors: [Color(0xFF5577FF), Color(0xFF7755FF), Color(0xFF5555FF)],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text(
+                  'WebReader',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const Text(
+                  'Listen to web articles on the go',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: bodyColor,
+                    fontSize: 16,
+                    height: 1.55,
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                Image.asset(
+                  'assets/hero-image.png',
+                  height: 220,
+                  fit: BoxFit.contain,
+                ),
+
+                const SizedBox(height: 20),
+
+                const _GsFeatureRow(
+                  icon: Icons.text_fields_rounded,
+                  text: 'Clean, readable text from any webpage',
+                  color: bodyColor,
+                ),
+                const _GsFeatureRow(
+                  icon: Icons.record_voice_over_rounded,
+                  text: 'Listen with built-in text-to-speech',
+                  color: bodyColor,
+                ),
+                const _GsFeatureRow(
+                  icon: Icons.bookmark_rounded,
+                  text: 'Continue saved articles where you left off',
+                  color: bodyColor,
+                ),
+
+                // Push everything below to bottom
+                const Spacer(),
+
+                const Text(
+                  'Paste a URL below to get started.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: bodyColor,
+                    fontSize: 16,
+                    height: 1.55,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                TextField(
+                  controller: controller,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Paste a URL to read…',
+                    hintStyle: TextStyle(color: Colors.white70),
+                    prefixIcon: const Icon(Icons.link, color: Colors.white70),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(color: Colors.white54),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: const BorderSide(
+                        color: Colors.white,
+                        width: 2,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white24,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 16,
+                    ),
+                  ),
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.go,
+                  onSubmitted: isLoading ? null : onSubmit,
+                ),
+
+                if (error != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    error!,
+                    style: TextStyle(color: Colors.red.shade200, fontSize: 12),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed:
+                        isLoading ? null : () => onSubmit(controller.text),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: titleColor,
+                      foregroundColor: const Color(0xFF3A1A60),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      elevation: 0,
+                    ),
+                    child:
+                        isLoading
+                            ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Color(0xFF3A1A60),
+                              ),
+                            )
+                            : const Text(
+                              'Open',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                  ),
+                ),
+                const SizedBox(height: 64),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GsFeatureRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  const _GsFeatureRow({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, color: color.withAlpha(200), size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(text, style: TextStyle(color: color, fontSize: 15)),
+          ),
+        ],
       ),
     );
   }

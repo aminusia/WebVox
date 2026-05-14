@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
-import 'package:web_reader/data/database/app_database.dart';
-import 'package:web_reader/domain/entities/reading_state.dart';
+import 'package:webreader/data/database/app_database.dart';
+import 'package:webreader/domain/entities/reading_state.dart';
 
 class LocalReadingStateSource {
   Future<Database> get _db => AppDatabase.instance.database;

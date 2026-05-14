@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_reader/core/theme/app_theme.dart';
-import 'package:web_reader/presentation/providers/providers.dart';
-import 'package:web_reader/presentation/providers/tts_notifier.dart';
+import 'package:webreader/core/theme/app_theme.dart';
+import 'package:webreader/presentation/providers/providers.dart';
+import 'package:webreader/presentation/providers/tts_notifier.dart';
 
 /// Returns a human-readable label from a raw TTS voice name.
 /// E.g. "en-us-x-sfg#female_1-local" → "female_1"

@@ -1,10 +1,10 @@
 import 'package:uuid/uuid.dart';
-import 'package:web_reader/core/constants/app_constants.dart';
-import 'package:web_reader/data/sources/local/local_article_source.dart';
-import 'package:web_reader/data/sources/remote/remote_article_source.dart';
-import 'package:web_reader/domain/entities/article.dart';
-import 'package:web_reader/domain/entities/title_group.dart';
-import 'package:web_reader/domain/repositories/article_repository.dart';
+import 'package:webreader/core/constants/app_constants.dart';
+import 'package:webreader/data/sources/local/local_article_source.dart';
+import 'package:webreader/data/sources/remote/remote_article_source.dart';
+import 'package:webreader/domain/entities/article.dart';
+import 'package:webreader/domain/entities/title_group.dart';
+import 'package:webreader/domain/repositories/article_repository.dart';
 
 class ArticleRepositoryImpl implements ArticleRepository {
   final LocalArticleSource _local;

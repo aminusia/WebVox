@@ -1,5 +1,5 @@
-import 'package:web_reader/domain/entities/article.dart';
-import 'package:web_reader/domain/entities/title_group.dart';
+import 'package:webreader/domain/entities/article.dart';
+import 'package:webreader/domain/entities/title_group.dart';
 
 abstract class ArticleRepository {
   Future<Article> fetchArticle(String url);

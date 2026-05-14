@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_reader/domain/entities/article.dart';
-import 'package:web_reader/domain/entities/reading_state.dart';
-import 'package:web_reader/presentation/providers/providers.dart';
-import 'package:web_reader/presentation/providers/tts_notifier.dart';
+import 'package:webreader/domain/entities/article.dart';
+import 'package:webreader/domain/entities/reading_state.dart';
+import 'package:webreader/presentation/providers/providers.dart';
+import 'package:webreader/presentation/providers/tts_notifier.dart';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 

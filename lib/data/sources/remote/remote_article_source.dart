@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:web_reader/core/constants/app_constants.dart';
-import 'package:web_reader/core/utils/html_parser.dart';
+import 'package:webreader/core/constants/app_constants.dart';
+import 'package:webreader/core/utils/html_parser.dart';
 
 class RemoteArticleSource {
   final HtmlParser _parser;

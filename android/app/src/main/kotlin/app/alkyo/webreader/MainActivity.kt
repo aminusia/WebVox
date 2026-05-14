@@ -1,4 +1,4 @@
-package com.webreader.web_reader
+package app.alkyo.webreader
 
 import com.ryanheise.audioservice.AudioServiceActivity
 
