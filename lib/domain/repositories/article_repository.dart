@@ -1,4 +1,5 @@
 import 'package:web_reader/domain/entities/article.dart';
+import 'package:web_reader/domain/entities/title_group.dart';
 
 abstract class ArticleRepository {
   Future<Article> fetchArticle(String url);
@@ -26,4 +27,18 @@ abstract class ArticleRepository {
 
   /// Remove an article from read history without deleting it from cache.
   Future<void> removeFromHistory(String id);
+
+  // ─── Grouped queries ────────────────────────────────────────────────────
+
+  /// Recent articles grouped by book/series title, newest-read first.
+  Future<List<TitleGroup>> getRecentGrouped();
+
+  /// Bookmarked articles grouped by book/series title.
+  Future<List<TitleGroup>> getBookmarksGrouped();
+
+  // ─── Title management ───────────────────────────────────────────────────
+
+  Future<void> updateTitleName(String titleId, String name);
+  Future<void> removeHistoryForTitle(String titleId);
+  Future<void> removeBookmarksForTitle(String titleId);
 }

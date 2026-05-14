@@ -3,6 +3,7 @@ import 'package:web_reader/core/constants/app_constants.dart';
 import 'package:web_reader/data/sources/local/local_article_source.dart';
 import 'package:web_reader/data/sources/remote/remote_article_source.dart';
 import 'package:web_reader/domain/entities/article.dart';
+import 'package:web_reader/domain/entities/title_group.dart';
 import 'package:web_reader/domain/repositories/article_repository.dart';
 
 class ArticleRepositoryImpl implements ArticleRepository {
@@ -108,4 +109,23 @@ class ArticleRepositoryImpl implements ArticleRepository {
 
   @override
   Future<void> removeFromHistory(String id) => _local.removeFromHistory(id);
+
+  @override
+  Future<List<TitleGroup>> getRecentGrouped() => _local.getRecentGrouped();
+
+  @override
+  Future<List<TitleGroup>> getBookmarksGrouped() =>
+      _local.getBookmarksGrouped();
+
+  @override
+  Future<void> updateTitleName(String titleId, String name) =>
+      _local.updateTitleName(titleId, name);
+
+  @override
+  Future<void> removeHistoryForTitle(String titleId) =>
+      _local.removeHistoryForTitle(titleId);
+
+  @override
+  Future<void> removeBookmarksForTitle(String titleId) =>
+      _local.removeBookmarksForTitle(titleId);
 }

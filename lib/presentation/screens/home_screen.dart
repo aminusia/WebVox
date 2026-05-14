@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_reader/domain/entities/article.dart';
+import 'package:web_reader/domain/entities/title_group.dart';
 import 'package:web_reader/presentation/providers/providers.dart';
 import 'package:web_reader/presentation/screens/reader_screen.dart';
 import 'package:web_reader/presentation/screens/settings_screen.dart';
@@ -18,8 +19,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   bool _isLoading = false;
   String? _error;
   late TabController _tabController;
-  int _recentShowCount = 20;
-  int _bookmarksShowCount = 20;
+
+  // The titleId of the currently-expanded accordion row (null = all collapsed).
+  String? _expandedRecentTitleId;
+  String? _expandedBookmarkTitleId;
 
   @override
   void initState() {
@@ -61,8 +64,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => ReaderScreen(article: cached)));
-    ref.read(recentArticlesProvider.notifier).load();
-    ref.read(bookmarksProvider.notifier).load();
+    _refreshAll();
+  }
+
+  void _refreshAll() {
+    ref.read(recentGroupedProvider.notifier).load();
+    ref.read(bookmarksGroupedProvider.notifier).load();
   }
 
   @override
@@ -88,14 +95,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final repo = ref.read(articleRepositoryProvider);
       final article = await repo.fetchArticle(url);
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
-      ref.read(recentArticlesProvider.notifier).load();
 
       if (!mounted) return;
       await Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => ReaderScreen(article: article)));
-      // Refresh recent list after returning
-      ref.read(recentArticlesProvider.notifier).load();
+      _refreshAll();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Could not load article.\n${e.toString()}');
@@ -115,16 +120,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return url;
   }
 
-  void _openArticle(Article article) async {
+  Future<void> _openArticle(Article article) async {
     await ref.read(settingsRepositoryProvider).setLastArticleUrl(article.url);
     if (!mounted) return;
 
-    // Check if article has reading state (i.e., was previously being read)
     final readingStateRepo = ref.read(readingStateRepositoryProvider);
     final readingState = await readingStateRepo.getReadingState(article.id);
 
     if (readingState != null && mounted) {
-      // Show "Continue where you left off" notification
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Continue where you left off'),
@@ -136,14 +139,90 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => ReaderScreen(article: article)));
-    ref.read(recentArticlesProvider.notifier).load();
-    ref.read(bookmarksProvider.notifier).load();
+    _refreshAll();
+  }
+
+  Future<void> _showRenameTitleDialog(
+    TitleGroup group, {
+    required bool isBookmarks,
+  }) async {
+    final ctrl = TextEditingController(text: group.titleName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Rename title'),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Title name'),
+              onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+    );
+    // Defer dispose until after the dialog close animation finishes (~300 ms).
+    // addPostFrameCallback only waits one frame, which is not enough for the
+    // pop transition; using a fixed delay avoids "used after dispose" errors.
+    Future.delayed(const Duration(milliseconds: 400), ctrl.dispose);
+    if (newName == null || newName.isEmpty) return;
+    if (isBookmarks) {
+      await ref
+          .read(bookmarksGroupedProvider.notifier)
+          .renameTitle(group.titleId, newName);
+    } else {
+      await ref
+          .read(recentGroupedProvider.notifier)
+          .renameTitle(group.titleId, newName);
+    }
+  }
+
+  Future<void> _confirmDeleteTitle(
+    TitleGroup group, {
+    required bool isBookmarks,
+  }) async {
+    final label = isBookmarks ? 'bookmarks' : 'reading history';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Remove title?'),
+            content: Text('Remove "${group.titleName}" from $label?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) return;
+    if (isBookmarks) {
+      await ref
+          .read(bookmarksGroupedProvider.notifier)
+          .removeTitle(group.titleId);
+    } else {
+      await ref.read(recentGroupedProvider.notifier).removeTitle(group.titleId);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final recentAsync = ref.watch(recentArticlesProvider);
-    final bookmarksAsync = ref.watch(bookmarksProvider);
+    final recentAsync = ref.watch(recentGroupedProvider);
+    final bookmarksAsync = ref.watch(bookmarksGroupedProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -182,24 +261,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('$e')),
                   data:
-                      (articles) =>
-                          articles.isEmpty
+                      (groups) =>
+                          groups.isEmpty
                               ? const _EmptyState()
-                              : _ArticleListWithShowMore(
-                                articles: articles,
-                                showCount: _recentShowCount,
-                                onShowMore:
-                                    () =>
-                                        setState(() => _recentShowCount += 20),
-                                onTap: _openArticle,
-                                onDelete: (id) async {
-                                  await ref
-                                      .read(articleRepositoryProvider)
-                                      .removeFromHistory(id);
-                                  ref
-                                      .read(recentArticlesProvider.notifier)
-                                      .load();
-                                },
+                              : _GroupedList(
+                                groups: groups,
+                                expandedTitleId: _expandedRecentTitleId,
+                                onToggle:
+                                    (id) => setState(
+                                      () =>
+                                          _expandedRecentTitleId =
+                                              _expandedRecentTitleId == id
+                                                  ? null
+                                                  : id,
+                                    ),
+                                onArticleTap: _openArticle,
+                                onRenameTitle:
+                                    (g) => _showRenameTitleDialog(
+                                      g,
+                                      isBookmarks: false,
+                                    ),
+                                onDeleteTitle:
+                                    (g) => _confirmDeleteTitle(
+                                      g,
+                                      isBookmarks: false,
+                                    ),
                               ),
                 ),
                 // Bookmarks tab
@@ -209,23 +295,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('$e')),
                   data:
-                      (articles) =>
-                          articles.isEmpty
+                      (groups) =>
+                          groups.isEmpty
                               ? const Center(child: Text('No bookmarks yet'))
-                              : _ArticleListWithShowMore(
-                                articles: articles,
-                                showCount: _bookmarksShowCount,
-                                onShowMore:
-                                    () => setState(
-                                      () => _bookmarksShowCount += 20,
+                              : _GroupedList(
+                                groups: groups,
+                                expandedTitleId: _expandedBookmarkTitleId,
+                                onToggle:
+                                    (id) => setState(
+                                      () =>
+                                          _expandedBookmarkTitleId =
+                                              _expandedBookmarkTitleId == id
+                                                  ? null
+                                                  : id,
                                     ),
-                                onTap: _openArticle,
-                                onDelete: (id) async {
-                                  await ref
-                                      .read(articleRepositoryProvider)
-                                      .toggleBookmark(id);
-                                  ref.read(bookmarksProvider.notifier).load();
-                                },
+                                onArticleTap: _openArticle,
+                                onRenameTitle:
+                                    (g) => _showRenameTitleDialog(
+                                      g,
+                                      isBookmarks: true,
+                                    ),
+                                onDeleteTitle:
+                                    (g) => _confirmDeleteTitle(
+                                      g,
+                                      isBookmarks: true,
+                                    ),
                               ),
                 ),
               ],
@@ -236,6 +330,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 }
+
+// ─── URL input bar ──────────────────────────────────────────────────────────
 
 class _UrlInputBar extends StatelessWidget {
   final TextEditingController controller;
@@ -303,132 +399,184 @@ class _UrlInputBar extends StatelessWidget {
   }
 }
 
-class _ArticleListWithShowMore extends StatefulWidget {
-  final List<Article> articles;
-  final int showCount;
-  final VoidCallback onShowMore;
-  final void Function(Article) onTap;
-  final void Function(String) onDelete;
+// ─── Grouped accordion list ──────────────────────────────────────────────────
 
-  const _ArticleListWithShowMore({
-    required this.articles,
-    required this.showCount,
-    required this.onShowMore,
-    required this.onTap,
-    required this.onDelete,
+class _GroupedList extends StatelessWidget {
+  final List<TitleGroup> groups;
+  final String? expandedTitleId;
+  final void Function(String titleId) onToggle;
+  final void Function(Article) onArticleTap;
+  final void Function(TitleGroup) onRenameTitle;
+  final void Function(TitleGroup) onDeleteTitle;
+
+  const _GroupedList({
+    required this.groups,
+    required this.expandedTitleId,
+    required this.onToggle,
+    required this.onArticleTap,
+    required this.onRenameTitle,
+    required this.onDeleteTitle,
   });
 
   @override
-  State<_ArticleListWithShowMore> createState() =>
-      _ArticleListWithShowMoreState();
-}
-
-class _ArticleListWithShowMoreState extends State<_ArticleListWithShowMore> {
-  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
-  late List<Article> _items;
-  final Set<String> _removingIds = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _items = widget.articles.take(widget.showCount).toList();
-  }
-
-  @override
-  void didUpdateWidget(_ArticleListWithShowMore old) {
-    super.didUpdateWidget(old);
-    // When the provider pushes a new list (after delete/reload), sync _items.
-    // We already animated the removed tile out; just refresh the rest.
-    final next = widget.articles.take(widget.showCount).toList();
-    // Insert any newly added items at the top.
-    for (int i = 0; i < next.length; i++) {
-      if (i >= _items.length || _items[i].id != next[i].id) {
-        // Skip rebuild if the only difference is an item currently animating out.
-        if (_removingIds.isNotEmpty) return;
-        // Rebuild fully on structural changes other than a single removal
-        // (e.g. "show more", refresh) — no animation needed for additions.
-        setState(() => _items = next);
-        return;
-      }
-    }
-    // Trim any items that are in _items but not in next.
-    if (_items.length > next.length && _removingIds.isEmpty) {
-      setState(() => _items = next);
-    }
-  }
-
-  void _removeItem(int index) {
-    final removed = _items[index];
-    _removingIds.add(removed.id);
-    _items.removeAt(index);
-    _listKey.currentState?.removeItem(
-      index,
-      (context, animation) => _buildTile(context, removed, animation),
-      duration: const Duration(milliseconds: 300),
-    );
-    Future.delayed(const Duration(milliseconds: 300), () {
-      _removingIds.remove(removed.id);
-    });
-    widget.onDelete(removed.id);
-  }
-
-  Widget _buildTile(
-    BuildContext context,
-    Article a,
-    Animation<double> animation,
-  ) {
-    return SizeTransition(
-      sizeFactor: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-      child: FadeTransition(
-        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-        child: ListTile(
-          leading:
-              a.isBookmarked
-                  ? const Icon(Icons.bookmark, color: Colors.amber)
-                  : const Icon(Icons.article_outlined),
-          title: Text(a.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            '${a.estimatedReadTime} min read · ${a.language}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          trailing: IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () {
-              final i = _items.indexOf(a);
-              if (i >= 0) _removeItem(i);
-            },
-          ),
-          onTap: () => widget.onTap(a),
-        ),
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final hasMore = widget.articles.length > widget.showCount;
-
-    return AnimatedList(
-      key: _listKey,
-      initialItemCount: _items.length + (hasMore ? 1 : 0),
-      itemBuilder: (context, i, animation) {
-        if (i == _items.length) {
-          // "Show More" button
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: ElevatedButton(
-                onPressed: widget.onShowMore,
-                child: const Text('Show More'),
-              ),
-            ),
-          );
-        }
-        return _buildTile(context, _items[i], animation);
+    return ListView.builder(
+      itemCount: groups.length,
+      itemBuilder: (context, i) {
+        final group = groups[i];
+        return _TitleAccordion(
+          group: group,
+          isExpanded: expandedTitleId == group.titleId,
+          onToggle: () => onToggle(group.titleId),
+          onArticleTap: onArticleTap,
+          onRename: () => onRenameTitle(group),
+          onDelete: () => onDeleteTitle(group),
+        );
       },
     );
   }
 }
+
+class _TitleAccordion extends StatelessWidget {
+  final TitleGroup group;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final void Function(Article) onArticleTap;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
+
+  const _TitleAccordion({
+    required this.group,
+    required this.isExpanded,
+    required this.onToggle,
+    required this.onArticleTap,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dimColor = theme.textTheme.bodySmall?.color?.withAlpha(153);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Title header
+        InkWell(
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 10, 4, 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                AnimatedRotation(
+                  turns: isExpanded ? 0.25 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(Icons.chevron_right, size: 20),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        group.titleName,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        group.websiteDomain,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: dimColor,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  tooltip: 'Rename',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onRename,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  tooltip: 'Remove',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onDelete,
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Article list (animated)
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 200),
+          crossFadeState:
+              isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+          firstChild: Column(
+            children:
+                group.articles
+                    .map((a) => _ArticleTile(article: a, onTap: onArticleTap))
+                    .toList(),
+          ),
+          secondChild: const SizedBox.shrink(),
+        ),
+        const Divider(height: 1),
+      ],
+    );
+  }
+}
+
+class _ArticleTile extends StatelessWidget {
+  final Article article;
+  final void Function(Article) onTap;
+
+  const _ArticleTile({required this.article, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => onTap(article),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(44, 6, 16, 6),
+        child: Row(
+          children: [
+            Icon(
+              article.isBookmarked ? Icons.bookmark : Icons.article_outlined,
+              size: 16,
+              color:
+                  article.isBookmarked
+                      ? Colors.amber
+                      : theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                article.title,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                  decorationColor: theme.colorScheme.primary.withAlpha(120),
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();

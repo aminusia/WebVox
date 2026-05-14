@@ -46,11 +46,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   TtsState? _lastTtsState;
   ArticleReaderState? _lastReaderState;
 
-  /// Whether the app is currently in the background.
-  bool _isInBackground = false;
-
   /// Key to access [ArticleContentWidgetState.ensureWordVisible].
   final _contentKey = GlobalKey<ArticleContentWidgetState>();
+
+  // ── Paragraph-tap overlay ─────────────────────────────────────────────────
+  int? _overlayParagraphIndex;
+  OverlayEntry? _playOverlayEntry;
+  GlobalKey<_PlayHereOverlayState>? _playOverlayKey;
 
   // ── Init / Dispose ──────────────────────────────────────────────────────────
 
@@ -82,6 +84,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _bestEffortSaveOnDispose();
+    _playOverlayEntry?.remove();
+    _playOverlayEntry = null;
     _scroll.dispose();
     super.dispose();
   }
@@ -116,11 +120,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final notifier = ref.read(articleReaderProvider.notifier);
     if (state == AppLifecycleState.resumed) {
-      _isInBackground = false;
       notifier.onAppResumed();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      _isInBackground = true;
       final cacheInBackground =
           ref.read(settingsProvider).valueOrNull?.cacheInBackground ?? false;
       notifier.onAppPaused(cacheInBackground: cacheInBackground);
@@ -172,6 +174,56 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   // ── User interactions ───────────────────────────────────────────────────────
 
   void _onParagraphTapped(int paragraphIndex) {
+    if (_playOverlayEntry != null) {
+      if (_overlayParagraphIndex == paragraphIndex) {
+        // Same paragraph tapped again — dismiss overlay.
+        _dismissPlayOverlay();
+        return;
+      }
+      // Different paragraph — remove current overlay immediately, show new one.
+      _playOverlayEntry!.remove();
+      _playOverlayEntry = null;
+      _overlayParagraphIndex = null;
+      _playOverlayKey = null;
+    }
+    _showPlayOverlay(paragraphIndex);
+  }
+
+  void _showPlayOverlay(int paragraphIndex) {
+    if (paragraphIndex < 0 || paragraphIndex >= _paragraphKeys.length) return;
+    final key = _paragraphKeys[paragraphIndex];
+    if (key.currentContext == null) return;
+    final renderBox = key.currentContext!.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final offset = renderBox.localToGlobal(Offset.zero);
+    final width = renderBox.size.width;
+
+    _overlayParagraphIndex = paragraphIndex;
+    _playOverlayKey = GlobalKey<_PlayHereOverlayState>();
+
+    _playOverlayEntry = OverlayEntry(
+      builder:
+          (_) => _PlayHereOverlay(
+            key: _playOverlayKey,
+            anchorOffset: offset,
+            anchorWidth: width,
+            onDismissed: () {
+              _playOverlayEntry?.remove();
+              _playOverlayEntry = null;
+              _overlayParagraphIndex = null;
+              _playOverlayKey = null;
+            },
+            onPlay: () => _executePlayFromParagraph(paragraphIndex),
+          ),
+    );
+    Overlay.of(context).insert(_playOverlayEntry!);
+  }
+
+  void _dismissPlayOverlay() {
+    _playOverlayKey?.currentState?.animateOut();
+  }
+
+  void _executePlayFromParagraph(int paragraphIndex) {
     final ttsNotifier = ref.read(ttsProvider.notifier);
     ttsNotifier.cancelScheduledPlay();
     if (ref.read(ttsProvider).isActive) ttsNotifier.stop();
@@ -736,6 +788,137 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 )
                 : null,
       ),
+    );
+  }
+}
+
+// ── "Play here" overlay ───────────────────────────────────────────────────────
+
+class _PlayHereOverlay extends StatefulWidget {
+  final Offset anchorOffset;
+  final double anchorWidth;
+  final VoidCallback onDismissed;
+  final VoidCallback onPlay;
+
+  const _PlayHereOverlay({
+    super.key,
+    required this.anchorOffset,
+    required this.anchorWidth,
+    required this.onDismissed,
+    required this.onPlay,
+  });
+
+  @override
+  State<_PlayHereOverlay> createState() => _PlayHereOverlayState();
+}
+
+class _PlayHereOverlayState extends State<_PlayHereOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  static const _buttonHeight = 44.0;
+  static const _gap = 8.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+      reverseDuration: const Duration(milliseconds: 180),
+    );
+    // Bouncy scale — elasticOut gives the spring effect on entry.
+    _scale = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
+    // Fade resolves quickly so the button "pops in" then bounces.
+    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.35, curve: Curves.easeIn),
+      ),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void animateOut() {
+    if (!mounted) return;
+    _controller.reverse().then((_) {
+      if (mounted) widget.onDismissed();
+    });
+  }
+
+  void _handlePlay() {
+    widget.onPlay(); // schedule TTS immediately
+    animateOut(); // then animate the overlay away
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Clamp so the button never appears off the top of the screen.
+    final rawTop = widget.anchorOffset.dy - _buttonHeight - _gap;
+    final top = rawTop.clamp(
+      MediaQuery.of(context).padding.top + 4.0,
+      double.infinity,
+    );
+
+    return Stack(
+      children: [
+        // Full-screen invisible barrier — captures taps outside the button.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: animateOut,
+            child: const ColoredBox(color: Colors.transparent),
+          ),
+        ),
+        // Animated "Play here" button, anchored above the paragraph.
+        Positioned(
+          left: widget.anchorOffset.dx,
+          top: top,
+          width: widget.anchorWidth,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder:
+                (_, child) => Opacity(
+                  opacity: _opacity.value,
+                  child: ScaleTransition(
+                    scale: _scale,
+                    alignment: Alignment.bottomCenter,
+                    child: child,
+                  ),
+                ),
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: ElevatedButton.icon(
+                  onPressed: _handlePlay,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Play here'),
+                  style: ElevatedButton.styleFrom(
+                    elevation: 8,
+                    shadowColor: Colors.black45,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    shape: const StadiumBorder(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

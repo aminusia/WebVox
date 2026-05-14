@@ -1,6 +1,8 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 import 'package:web_reader/core/constants/app_constants.dart';
+import 'package:web_reader/core/utils/title_extractor.dart';
 
 class AppDatabase {
   static AppDatabase? _instance;
@@ -103,9 +105,107 @@ class AppDatabase {
         'ALTER TABLE read_history ADD COLUMN is_completed INTEGER NOT NULL DEFAULT 0',
       );
     }
+    if (oldVersion < 7) {
+      // Create websites table.
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS websites (
+          id TEXT PRIMARY KEY,
+          domain TEXT NOT NULL UNIQUE,
+          custom_title TEXT
+        )
+      ''');
+      // Create titles table.
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS titles (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          website_id TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )
+      ''');
+      // Add title_id column to articles.
+      await db.execute('ALTER TABLE articles ADD COLUMN title_id TEXT');
+
+      // Migrate existing articles → derive website + title records.
+      const uuid = Uuid();
+      final articles = await db.query('articles');
+      final Map<String, String> domainToWebsiteId = {};
+      // key = "websiteId\x00titleName" → titleId
+      final Map<String, String> titleKeyToId = {};
+
+      for (final row in articles) {
+        final url = row['url'] as String? ?? '';
+        final articleTitle = row['title'] as String? ?? '';
+        final articleId = row['id'] as String;
+        final createdAt = row['created_at'] as int? ?? 0;
+
+        final domain = TitleExtractor.extractDomain(url);
+        final bookTitle = TitleExtractor.extractBookTitle(articleTitle);
+
+        // Find or create website.
+        String websiteId;
+        if (domainToWebsiteId.containsKey(domain)) {
+          websiteId = domainToWebsiteId[domain]!;
+        } else {
+          websiteId = uuid.v4();
+          await db.insert('websites', {
+            'id': websiteId,
+            'domain': domain,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          domainToWebsiteId[domain] = websiteId;
+        }
+
+        // Find or create title.
+        final titleKey = '$websiteId\x00$bookTitle';
+        String titleId;
+        if (titleKeyToId.containsKey(titleKey)) {
+          titleId = titleKeyToId[titleKey]!;
+        } else {
+          titleId = uuid.v4();
+          await db.insert('titles', {
+            'id': titleId,
+            'name': bookTitle,
+            'website_id': websiteId,
+            'created_at': createdAt,
+          });
+          titleKeyToId[titleKey] = titleId;
+        }
+
+        // Link article to title.
+        await db.update(
+          'articles',
+          {'title_id': titleId},
+          where: 'id = ?',
+          whereArgs: [articleId],
+        );
+      }
+    }
+    if (oldVersion < 8) {
+      // Add display_name to titles: user-editable label separate from the
+      // original name (which is used for matching new articles to groups).
+      await db.execute('ALTER TABLE titles ADD COLUMN display_name TEXT');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE websites (
+        id TEXT PRIMARY KEY,
+        domain TEXT NOT NULL UNIQUE,
+        custom_title TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE titles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        display_name TEXT,
+        website_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+
     await db.execute('''
       CREATE TABLE articles (
         id TEXT PRIMARY KEY,
@@ -118,7 +218,8 @@ class AppDatabase {
         created_at INTEGER NOT NULL,
         prev_url TEXT,
         next_url TEXT,
-        home_url TEXT
+        home_url TEXT,
+        title_id TEXT
       )
     ''');
 

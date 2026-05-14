@@ -7,6 +7,7 @@ import 'package:web_reader/data/repositories/reading_state_repository_impl.dart'
 import 'package:web_reader/data/repositories/settings_repository_impl.dart';
 import 'package:web_reader/domain/entities/article.dart';
 import 'package:web_reader/domain/entities/settings.dart';
+import 'package:web_reader/domain/entities/title_group.dart';
 import 'package:web_reader/domain/repositories/article_repository.dart';
 import 'package:web_reader/domain/repositories/reading_state_repository.dart';
 import 'package:web_reader/domain/repositories/settings_repository.dart';
@@ -157,6 +158,68 @@ class RecentArticlesNotifier extends StateNotifier<AsyncValue<List<Article>>> {
   Future<void> load() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() => _repo.getRecentArticles());
+  }
+}
+
+// ─── Recent Grouped ───────────────────────────────────────────────────────────
+
+final recentGroupedProvider =
+    StateNotifierProvider<RecentGroupedNotifier, AsyncValue<List<TitleGroup>>>(
+      (ref) => RecentGroupedNotifier(ref.read(articleRepositoryProvider)),
+    );
+
+class RecentGroupedNotifier
+    extends StateNotifier<AsyncValue<List<TitleGroup>>> {
+  final ArticleRepository _repo;
+
+  RecentGroupedNotifier(this._repo) : super(const AsyncLoading()) {
+    load();
+  }
+
+  Future<void> load() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _repo.getRecentGrouped());
+  }
+
+  Future<void> removeTitle(String titleId) async {
+    await _repo.removeHistoryForTitle(titleId);
+    await load();
+  }
+
+  Future<void> renameTitle(String titleId, String newName) async {
+    await _repo.updateTitleName(titleId, newName);
+    await load();
+  }
+}
+
+// ─── Bookmarks Grouped ────────────────────────────────────────────────────────
+
+final bookmarksGroupedProvider = StateNotifierProvider<
+  BookmarksGroupedNotifier,
+  AsyncValue<List<TitleGroup>>
+>((ref) => BookmarksGroupedNotifier(ref.read(articleRepositoryProvider)));
+
+class BookmarksGroupedNotifier
+    extends StateNotifier<AsyncValue<List<TitleGroup>>> {
+  final ArticleRepository _repo;
+
+  BookmarksGroupedNotifier(this._repo) : super(const AsyncLoading()) {
+    load();
+  }
+
+  Future<void> load() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _repo.getBookmarksGrouped());
+  }
+
+  Future<void> removeTitle(String titleId) async {
+    await _repo.removeBookmarksForTitle(titleId);
+    await load();
+  }
+
+  Future<void> renameTitle(String titleId, String newName) async {
+    await _repo.updateTitleName(titleId, newName);
+    await load();
   }
 }
 

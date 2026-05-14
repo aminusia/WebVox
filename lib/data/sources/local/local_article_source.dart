@@ -1,9 +1,14 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
+import 'package:web_reader/core/utils/title_extractor.dart';
 import 'package:web_reader/data/database/app_database.dart';
 import 'package:web_reader/domain/entities/article.dart';
+import 'package:web_reader/domain/entities/title_group.dart';
 
 class LocalArticleSource {
   Future<Database> get _db => AppDatabase.instance.database;
+
+  static const _uuid = Uuid();
 
   // Columns shared by all queries that need bookmark status via LEFT JOIN.
   static const _cols = '''
@@ -13,9 +18,66 @@ class LocalArticleSource {
     CASE WHEN b.article_id IS NOT NULL THEN 1 ELSE 0 END AS is_bookmarked
   ''';
 
+  // ─── Title / website resolution ─────────────────────────────────────────
+
+  /// Returns the title_id for the given article URL + title, creating the
+  /// website and/or title record if they don't exist yet.
+  Future<String> _resolveOrCreateTitleId(
+    Database db,
+    String url,
+    String articleTitle,
+  ) async {
+    final domain = TitleExtractor.extractDomain(url);
+    final bookTitle = TitleExtractor.extractBookTitle(articleTitle);
+
+    // Find or create website row.
+    final wsRows = await db.query(
+      'websites',
+      columns: ['id'],
+      where: 'domain = ?',
+      whereArgs: [domain],
+      limit: 1,
+    );
+    final String websiteId;
+    if (wsRows.isNotEmpty) {
+      websiteId = wsRows.first['id'] as String;
+    } else {
+      websiteId = _uuid.v4();
+      await db.insert('websites', {
+        'id': websiteId,
+        'domain': domain,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+
+    // Find or create title row.
+    final tRows = await db.query(
+      'titles',
+      columns: ['id'],
+      where: 'name = ? AND website_id = ?',
+      whereArgs: [bookTitle, websiteId],
+      limit: 1,
+    );
+    if (tRows.isNotEmpty) {
+      return tRows.first['id'] as String;
+    }
+    final titleId = _uuid.v4();
+    await db.insert('titles', {
+      'id': titleId,
+      'name': bookTitle,
+      'website_id': websiteId,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    });
+    return titleId;
+  }
+
   Future<void> insertOrUpdate(Article article) async {
     final db = await _db;
-    final map = article.toMap(); // no is_bookmarked column anymore
+    final titleId = await _resolveOrCreateTitleId(
+      db,
+      article.url,
+      article.title,
+    );
+    final map = {...article.toMap(), 'title_id': titleId};
     await db.insert(
       'articles',
       map,
@@ -206,5 +268,123 @@ class LocalArticleSource {
       ORDER BY a.created_at DESC
       ''');
     return rows.map(Article.fromMap).toList();
+  }
+
+  // ─── Grouped queries ────────────────────────────────────────────────────
+
+  /// Recent articles grouped by title, ordered by most-recently-read first.
+  Future<List<TitleGroup>> getRecentGrouped() async {
+    final db = await _db;
+    final titleRows = await db.rawQuery('''
+      SELECT t.id AS title_id, COALESCE(t.display_name, t.name) AS title_name, w.domain AS website_domain,
+             MAX(rh.read_at) AS last_read_at
+      FROM titles t
+      JOIN websites w ON w.id = t.website_id
+      JOIN articles a ON a.title_id = t.id
+      JOIN read_history rh ON rh.article_id = a.id
+      GROUP BY t.id, t.name, w.domain
+      ORDER BY last_read_at DESC
+    ''');
+
+    final groups = <TitleGroup>[];
+    for (final tr in titleRows) {
+      final titleId = tr['title_id'] as String;
+      final articleRows = await db.rawQuery(
+        '''
+        SELECT $_cols
+        FROM read_history rh
+        JOIN articles a ON a.id = rh.article_id
+        LEFT JOIN bookmarks b ON b.article_id = a.id
+        WHERE a.title_id = ?
+        ORDER BY rh.read_at DESC
+      ''',
+        [titleId],
+      );
+      groups.add(
+        TitleGroup(
+          titleId: titleId,
+          titleName: tr['title_name'] as String,
+          websiteDomain: tr['website_domain'] as String,
+          articles: articleRows.map(Article.fromMap).toList(),
+        ),
+      );
+    }
+    return groups;
+  }
+
+  /// Bookmarked articles grouped by title, ordered by most-recently-bookmarked first.
+  Future<List<TitleGroup>> getBookmarksGrouped() async {
+    final db = await _db;
+    final titleRows = await db.rawQuery('''
+      SELECT t.id AS title_id, COALESCE(t.display_name, t.name) AS title_name, w.domain AS website_domain,
+             MAX(bk.bookmarked_at) AS last_bookmarked_at
+      FROM titles t
+      JOIN websites w ON w.id = t.website_id
+      JOIN articles a ON a.title_id = t.id
+      JOIN bookmarks bk ON bk.article_id = a.id
+      GROUP BY t.id, t.name, w.domain
+      ORDER BY last_bookmarked_at DESC
+    ''');
+
+    final groups = <TitleGroup>[];
+    for (final tr in titleRows) {
+      final titleId = tr['title_id'] as String;
+      final articleRows = await db.rawQuery(
+        '''
+        SELECT $_cols
+        FROM bookmarks bk
+        JOIN articles a ON a.id = bk.article_id
+        LEFT JOIN bookmarks b ON b.article_id = a.id
+        WHERE a.title_id = ?
+        ORDER BY bk.bookmarked_at DESC
+      ''',
+        [titleId],
+      );
+      groups.add(
+        TitleGroup(
+          titleId: titleId,
+          titleName: tr['title_name'] as String,
+          websiteDomain: tr['website_domain'] as String,
+          articles: articleRows.map(Article.fromMap).toList(),
+        ),
+      );
+    }
+    return groups;
+  }
+
+  // ─── Title management ───────────────────────────────────────────────────
+
+  Future<void> updateTitleName(String titleId, String name) async {
+    final db = await _db;
+    await db.update(
+      'titles',
+      {'display_name': name},
+      where: 'id = ?',
+      whereArgs: [titleId],
+    );
+  }
+
+  /// Remove all read_history rows for articles belonging to [titleId].
+  Future<void> removeHistoryForTitle(String titleId) async {
+    final db = await _db;
+    await db.rawDelete(
+      '''
+      DELETE FROM read_history
+      WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)
+    ''',
+      [titleId],
+    );
+  }
+
+  /// Remove all bookmark rows for articles belonging to [titleId].
+  Future<void> removeBookmarksForTitle(String titleId) async {
+    final db = await _db;
+    await db.rawDelete(
+      '''
+      DELETE FROM bookmarks
+      WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)
+    ''',
+      [titleId],
+    );
   }
 }
