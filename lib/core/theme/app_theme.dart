@@ -5,20 +5,32 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  /// Background color for all app bars and the TTS control bar.
-  static const Color barColor = Color(0xFF221177);
+  /// App bar / playback bar
+  static const Color barColor = Color(0xFF1B1464);
 
-  /// Fill color for primary action buttons (FilledButton / ElevatedButton).
-  static const Color primaryColor = Color(0xFF5577FF);
+  /// Primary interactive color
+  static const Color primaryColor = Color(0xFF5B7FFF);
 
-  /// Text color for titles.
-  static const Color titleColor = Color(0xFFEE9977);
+  /// Main titles / branding
+  static const Color titleColor = Color(0xFFE8EFFF);
 
-  /// Text color for get started body.
-  static const Color bodyColor = Color(0xFFFCF1E9);
+  /// Secondary readable text
+  static const Color bodyColor = Color(0xFFD7DCF7);
 
-  /// Foreground color used on top of [barColor] and [primaryColor].
+  /// Foreground on dark surfaces
   static const Color onBar = Colors.white;
+
+  /// Background (dark mode)
+  static const Color backgroundDark = Color(0xFF090B18);
+
+  /// Surface cards
+  static const Color surfaceDark = Color(0xFF12152A);
+
+  /// Reader background
+  static const Color readerBackground = Color(0xFF0D1020);
+
+  /// Accent highlight
+  static const Color accent = Color(0xFF7A5CFF);
 }
 
 class AppTheme {

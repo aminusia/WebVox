@@ -248,7 +248,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/appicon4.png', width: 24, height: 24),
+            Image.asset('assets/appicon.png', width: 24, height: 24),
             const SizedBox(width: 8),
             const Text(
               'WebReader',
@@ -274,12 +274,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       body: Column(
         children: [
+          SizedBox(height: 16),
           _UrlInputBar(
             controller: _urlController,
             isLoading: _isLoading,
             error: _error,
             onSubmit: _openUrl,
           ),
+          SizedBox(height: 16),
           TabBar(
             controller: _tabController,
             tabs: const [Tab(text: 'Recent'), Tab(text: 'Bookmarks')],
@@ -729,12 +731,15 @@ class _GetStartedPage extends StatelessWidget {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            // CSS 223deg ≈ begin at top-right, end at bottom-left
+          gradient: const LinearGradient(
             begin: Alignment(0.68, -0.73),
             end: Alignment(-0.68, 0.73),
-            colors: [Color(0xFF5577FF), Color(0xFF7755FF), Color(0xFF5555FF)],
-            stops: [0.0, 0.5, 1.0],
+            colors: [
+              Color(0xFF5B7FFF), // electric blue
+              Color(0xFF7A5CFF), // vibrant violet
+              Color(0xFF4F46E5), // deep indigo
+            ],
+            stops: [0.0, 0.52, 1.0],
           ),
         ),
         child: SafeArea(
@@ -743,6 +748,8 @@ class _GetStartedPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                const SizedBox(height: 20),
+
                 const Text(
                   'WebReader',
                   textAlign: TextAlign.center,
@@ -763,15 +770,109 @@ class _GetStartedPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 32),
 
                 Image.asset(
                   'assets/hero-image.png',
-                  height: 220,
+                  width: double.infinity,
                   fit: BoxFit.contain,
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 32),
+
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          TextField(
+                            controller: controller,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Paste a URL to read…',
+                              hintStyle: TextStyle(color: Colors.white70),
+                              prefixIcon: const Icon(
+                                Icons.link,
+                                color: Colors.white70,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(30),
+                                borderSide: BorderSide(color: Colors.white54),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(30),
+                                borderSide: const BorderSide(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white24,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                                horizontal: 16,
+                              ),
+                            ),
+                            keyboardType: TextInputType.url,
+                            textInputAction: TextInputAction.go,
+                            onSubmitted: isLoading ? null : onSubmit,
+                          ),
+                          Positioned(
+                            right: 6,
+                            child: ElevatedButton(
+                              onPressed:
+                                  isLoading
+                                      ? null
+                                      : () => onSubmit(controller.text),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: titleColor,
+                                foregroundColor: AppColors.primaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                                elevation: 0,
+                              ),
+                              child:
+                                  isLoading
+                                      ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                          color: AppColors.primaryColor,
+                                        ),
+                                      )
+                                      : const Text(
+                                        'Open',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (error != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          error!,
+                          style: TextStyle(
+                            color: Colors.red.shade200,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // Push everything below to bottom
+                const Spacer(),
 
                 const _GsFeatureRow(
                   icon: Icons.text_fields_rounded,
@@ -788,95 +889,6 @@ class _GetStartedPage extends StatelessWidget {
                   text: 'Continue saved articles where you left off',
                   color: bodyColor,
                 ),
-
-                // Push everything below to bottom
-                const Spacer(),
-
-                const Text(
-                  'Paste a URL below to get started.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: bodyColor,
-                    fontSize: 16,
-                    height: 1.55,
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                TextField(
-                  controller: controller,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Paste a URL to read…',
-                    hintStyle: TextStyle(color: Colors.white70),
-                    prefixIcon: const Icon(Icons.link, color: Colors.white70),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide(color: Colors.white54),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: const BorderSide(
-                        color: Colors.white,
-                        width: 2,
-                      ),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white24,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 14,
-                      horizontal: 16,
-                    ),
-                  ),
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.go,
-                  onSubmitted: isLoading ? null : onSubmit,
-                ),
-
-                if (error != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    error!,
-                    style: TextStyle(color: Colors.red.shade200, fontSize: 12),
-                  ),
-                ],
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed:
-                        isLoading ? null : () => onSubmit(controller.text),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: titleColor,
-                      foregroundColor: AppColors.primaryColor,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      elevation: 0,
-                    ),
-                    child:
-                        isLoading
-                            ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: AppColors.primaryColor,
-                              ),
-                            )
-                            : const Text(
-                              'Open',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                  ),
-                ),
-                const SizedBox(height: 64),
               ],
             ),
           ),

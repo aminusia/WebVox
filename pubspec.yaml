@@ -44,7 +44,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/appicon4.png
+    - assets/appicon.png
     - assets/hero-image.png
     - assets/adi-registration.properties
 
@@ -77,10 +77,10 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/appicon4.png"
+  image_path: "assets/appicon.png"
   # Adaptive icons (Android 8+ / API 26+): prevents blurry scaled legacy PNG.
   # The foreground is your icon; background is a solid color behind it.
   # The foreground will be scaled to fill 108×108dp with a 72dp safe zone —
   # if your icon has important content at the edges, add padding to appicon.png.
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/appicon4.png"
+  adaptive_icon_foreground: "assets/appicon.png"

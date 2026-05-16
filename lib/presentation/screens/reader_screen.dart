@@ -527,7 +527,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     article.title,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: article.isCached ? AppColors.titleColor : null,
+                      color:
+                          article.isCached
+                              ? AppColors.titleColor
+                              : AppColors.bodyColor,
                     ),
                   ),
                 ),
@@ -544,7 +547,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
             IconButton(
               icon: Icon(
                 isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                color: isBookmarked ? AppColors.titleColor : Colors.white,
+                color: isBookmarked ? AppColors.titleColor : AppColors.onBar,
               ),
               tooltip: isBookmarked ? 'Remove bookmark' : 'Bookmark',
               onPressed:

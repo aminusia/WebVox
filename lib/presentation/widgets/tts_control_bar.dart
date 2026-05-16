@@ -46,8 +46,9 @@ class TtsControlBar extends ConsumerWidget {
       }
     });
 
-    // Wrap in a Theme so all icons and text render light on the dark bar.
-    final barTheme = Theme.of(context).copyWith(
+    // Wrap in a fixed dark Theme so all icons and text render with AppColors.onBar
+    // regardless of the app's light/dark setting.
+    final barTheme = ThemeData.dark().copyWith(
       iconTheme: const IconThemeData(color: AppColors.onBar),
       disabledColor: Colors.white38,
     );
@@ -59,7 +60,7 @@ class TtsControlBar extends ConsumerWidget {
         margin: const EdgeInsets.only(left: 12, right: 12, bottom: 8),
         elevation: 4,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -72,14 +73,29 @@ class TtsControlBar extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   // Speed selector
-                  _SpeedButton(
-                    speed: ttsState.speed,
-                    onChanged: notifier.setSpeed,
+                  // _SpeedButton(
+                  //   speed: ttsState.speed,
+                  //   onChanged: notifier.setSpeed,
+                  // ),
+                  // Voice selector (inline, compact)
+                  voicesAsync.maybeWhen(
+                    data: (voices) {
+                      if (voices.isEmpty) return const SizedBox.shrink();
+                      return _VoiceButton(
+                        voices: voices,
+                        currentVoice: ttsState.voiceName,
+                        language: articleLanguage,
+                      );
+                    },
+                    orElse: () => const SizedBox.shrink(),
                   ),
                   // Skip previous
                   IconButton(
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.skip_previous_rounded),
+                    icon: const Icon(
+                      Icons.skip_previous_rounded,
+                      color: AppColors.onBar,
+                    ),
                     tooltip: 'Previous paragraph',
                     onPressed:
                         ttsState.isActive
@@ -95,6 +111,8 @@ class TtsControlBar extends ConsumerWidget {
                       icon: const Icon(Icons.play_arrow_rounded, size: 18),
                       label: const Text('Read'),
                       style: FilledButton.styleFrom(
+                        foregroundColor: AppColors.onBar,
+                        backgroundColor: AppColors.primaryColor,
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                       ),
@@ -112,7 +130,10 @@ class TtsControlBar extends ConsumerWidget {
                   else if (ttsState.isPlaying)
                     IconButton(
                       visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.pause_rounded),
+                      icon: const Icon(
+                        Icons.pause_rounded,
+                        color: AppColors.onBar,
+                      ),
                       tooltip: 'Pause',
                       color: AppColors.onBar,
                       onPressed: () {
@@ -123,7 +144,10 @@ class TtsControlBar extends ConsumerWidget {
                   else
                     IconButton(
                       visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.play_arrow_rounded),
+                      icon: const Icon(
+                        Icons.play_arrow_rounded,
+                        color: AppColors.onBar,
+                      ),
                       tooltip: 'Resume',
                       color: AppColors.onBar,
                       onPressed: () {
@@ -134,7 +158,10 @@ class TtsControlBar extends ConsumerWidget {
                   // Skip next
                   IconButton(
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.skip_next_rounded),
+                    icon: const Icon(
+                      Icons.skip_next_rounded,
+                      color: AppColors.onBar,
+                    ),
                     tooltip: 'Next paragraph',
                     onPressed:
                         ttsState.isActive
@@ -144,23 +171,11 @@ class TtsControlBar extends ConsumerWidget {
                             }
                             : null,
                   ),
-                  // Voice selector (inline, compact)
-                  voicesAsync.maybeWhen(
-                    data: (voices) {
-                      if (voices.isEmpty) return const SizedBox.shrink();
-                      return _VoiceButton(
-                        voices: voices,
-                        currentVoice: ttsState.voiceName,
-                        language: articleLanguage,
-                      );
-                    },
-                    orElse: () => const SizedBox.shrink(),
-                  ),
                   // Position text
                   Text(
                     ttsState.total > 0
                         ? '${ttsState.currentIndex + 1}/${ttsState.total}'
-                        : '',
+                        : '~',
                     style: Theme.of(
                       context,
                     ).textTheme.labelSmall?.copyWith(color: AppColors.onBar),
@@ -223,7 +238,7 @@ class _VoiceButton extends ConsumerWidget {
           size: 20,
           // On the dark bar, use full white when a voice is selected,
           // dim white when using the default.
-          color: currentVoice.isEmpty ? Colors.white54 : AppColors.onBar,
+          color: AppColors.onBar,
         ),
       ),
     );
