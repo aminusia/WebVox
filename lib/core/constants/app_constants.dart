@@ -27,7 +27,7 @@ class AppConstants {
   static const double defaultTtsSpeed = 0.5;
   static const double defaultFontSize = 18.0;
   static const bool defaultAutoNext = true;
-  static const bool defaultAutoRead = true;
+  static const bool defaultAutoRead = false;
   static const String defaultThemeMode = 'system';
   static const bool defaultCachingEnabled = true;
   static const bool defaultCacheInBackground = false;

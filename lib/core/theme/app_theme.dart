@@ -12,7 +12,10 @@ class AppColors {
   static const Color primaryColor = Color(0xFF5577FF);
 
   /// Text color for titles.
-  static const Color titleColor = Color(0xFFAA99FF);
+  static const Color titleColor = Color(0xFFEE9977);
+
+  /// Text color for get started body.
+  static const Color bodyColor = Color(0xFFFCF1E9);
 
   /// Foreground color used on top of [barColor] and [primaryColor].
   static const Color onBar = Colors.white;

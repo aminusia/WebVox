@@ -527,7 +527,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     article.title,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: article.isCached ? AppColors.primaryColor : null,
+                      color: article.isCached ? AppColors.titleColor : null,
                     ),
                   ),
                 ),
@@ -607,7 +607,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                   alignment: WrapAlignment.center,
                                   children: [
                                     if (article.prevUrl != null)
-                                      ElevatedButton.icon(
+                                      ElevatedButton(
                                         onPressed:
                                             isLoading
                                                 ? null
@@ -615,8 +615,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                   article.prevUrl,
                                                   resetProgress: true,
                                                 ),
-                                        icon: const Icon(Icons.chevron_left),
-                                        label: const Text('Prev'),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.chevron_left, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Prev'),
+                                          ],
+                                        ),
                                       ),
                                     if (article.homeUrl != null)
                                       ElevatedButton.icon(
@@ -630,7 +636,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                         label: const Text('Home'),
                                       ),
                                     if (article.nextUrl != null)
-                                      ElevatedButton.icon(
+                                      ElevatedButton(
                                         onPressed:
                                             isLoading
                                                 ? null
@@ -639,8 +645,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                   resetProgress: true,
                                                   markCurrentCompleted: true,
                                                 ),
-                                        icon: const Icon(Icons.chevron_right),
-                                        label: const Text('Next'),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text('Next'),
+                                            SizedBox(width: 8),
+                                            Icon(Icons.chevron_right, size: 18),
+                                          ],
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -693,7 +705,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                 children: [
                                   if (article.prevUrl != null &&
                                       autoNextCountdown == null)
-                                    ElevatedButton.icon(
+                                    ElevatedButton(
                                       onPressed:
                                           isLoading
                                               ? null
@@ -701,8 +713,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                 article.prevUrl,
                                                 resetProgress: true,
                                               ),
-                                      icon: const Icon(Icons.chevron_left),
-                                      label: const Text('Previous'),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.chevron_left, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Prev'),
+                                        ],
+                                      ),
                                     ),
                                   if (article.homeUrl != null &&
                                       autoNextCountdown == null)
@@ -721,7 +739,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          FilledButton.icon(
+                                          FilledButton(
                                             onPressed:
                                                 isLoading
                                                     ? null
@@ -731,11 +749,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                       markCurrentCompleted:
                                                           true,
                                                     ),
-                                            icon: const Icon(
-                                              Icons.chevron_right,
-                                            ),
-                                            label: Text(
-                                              'Next ($autoNextCountdown)',
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  'Next ($autoNextCountdown)',
+                                                ),
+                                                const SizedBox(width: 8),
+                                                const Icon(
+                                                  Icons.chevron_right,
+                                                  size: 18,
+                                                ),
+                                              ],
                                             ),
                                           ),
                                           const SizedBox(width: 8),
@@ -756,7 +781,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                         ],
                                       )
                                     else
-                                      ElevatedButton.icon(
+                                      ElevatedButton(
                                         onPressed:
                                             isLoading
                                                 ? null
@@ -765,8 +790,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                                   resetProgress: true,
                                                   markCurrentCompleted: true,
                                                 ),
-                                        icon: const Icon(Icons.chevron_right),
-                                        label: const Text('Next'),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text('Next'),
+                                            SizedBox(width: 8),
+                                            Icon(Icons.chevron_right, size: 18),
+                                          ],
+                                        ),
                                       ),
                                 ],
                               ),

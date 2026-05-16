@@ -248,7 +248,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/appicon3.png', width: 24, height: 24),
+            Image.asset('assets/appicon4.png', width: 24, height: 24),
             const SizedBox(width: 8),
             const Text(
               'WebReader',
@@ -483,7 +483,7 @@ class _GroupedList extends StatelessWidget {
   }
 }
 
-class _TitleAccordion extends StatelessWidget {
+class _TitleAccordion extends StatefulWidget {
   final TitleGroup group;
   final bool isExpanded;
   final VoidCallback onToggle;
@@ -503,23 +503,46 @@ class _TitleAccordion extends StatelessWidget {
   });
 
   @override
+  State<_TitleAccordion> createState() => _TitleAccordionState();
+}
+
+class _TitleAccordionState extends State<_TitleAccordion> {
+  static const _initialLimit = 3;
+  bool _showAll = false;
+
+  @override
+  void didUpdateWidget(_TitleAccordion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reset "show all" when the accordion collapses.
+    if (!widget.isExpanded && oldWidget.isExpanded) {
+      _showAll = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dimColor = theme.textTheme.bodySmall?.color?.withAlpha(153);
+    final articles = widget.group.articles;
+    final hasMore = articles.length > _initialLimit;
+    final visibleArticles =
+        (_showAll || !hasMore)
+            ? articles
+            : articles.take(_initialLimit).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Title header
         InkWell(
-          onTap: onToggle,
+          onTap: widget.onToggle,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 10, 4, 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 AnimatedRotation(
-                  turns: isExpanded ? 0.25 : 0.0,
+                  turns: widget.isExpanded ? 0.25 : 0.0,
                   duration: const Duration(milliseconds: 200),
                   child: const Icon(Icons.chevron_right, size: 20),
                 ),
@@ -529,7 +552,7 @@ class _TitleAccordion extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        group.titleName,
+                        widget.group.titleName,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w400,
                         ),
@@ -537,7 +560,7 @@ class _TitleAccordion extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        group.websiteDomain,
+                        widget.group.websiteDomain,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: dimColor,
                           fontSize: 13,
@@ -550,13 +573,13 @@ class _TitleAccordion extends StatelessWidget {
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   tooltip: 'Rename',
                   visualDensity: VisualDensity.compact,
-                  onPressed: onRename,
+                  onPressed: widget.onRename,
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, size: 18),
                   tooltip: 'Remove',
                   visualDensity: VisualDensity.compact,
-                  onPressed: onDelete,
+                  onPressed: widget.onDelete,
                 ),
               ],
             ),
@@ -566,18 +589,28 @@ class _TitleAccordion extends StatelessWidget {
         AnimatedCrossFade(
           duration: const Duration(milliseconds: 200),
           crossFadeState:
-              isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+              widget.isExpanded
+                  ? CrossFadeState.showFirst
+                  : CrossFadeState.showSecond,
           firstChild: Column(
-            children:
-                group.articles
-                    .map(
-                      (a) => _ArticleTile(
-                        article: a,
-                        onTap: onArticleTap,
-                        onDelete: onDeleteArticle,
-                      ),
-                    )
-                    .toList(),
+            children: [
+              ...visibleArticles.map(
+                (a) => _ArticleTile(
+                  article: a,
+                  onTap: widget.onArticleTap,
+                  onDelete: widget.onDeleteArticle,
+                ),
+              ),
+              if (hasMore)
+                TextButton(
+                  onPressed: () => setState(() => _showAll = !_showAll),
+                  child: Text(
+                    _showAll
+                        ? 'Show less'
+                        : 'Show ${articles.length - _initialLimit} more…',
+                  ),
+                ),
+            ],
           ),
           secondChild: const SizedBox.shrink(),
         ),
@@ -612,7 +645,7 @@ class _ArticleTile extends StatelessWidget {
               size: 16,
               color:
                   article.isBookmarked
-                      ? Colors.amber
+                      ? AppColors.titleColor
                       : theme.colorScheme.primary,
             ),
             const SizedBox(width: 8),
@@ -690,8 +723,8 @@ class _GetStartedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const titleColor = Color(0xFFF1CAD7);
-    const bodyColor = Color(0xFFFCF1E9);
+    const titleColor = AppColors.titleColor;
+    const bodyColor = AppColors.bodyColor;
 
     return Scaffold(
       body: Container(
@@ -818,7 +851,7 @@ class _GetStartedPage extends StatelessWidget {
                         isLoading ? null : () => onSubmit(controller.text),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: titleColor,
-                      foregroundColor: const Color(0xFF3A1A60),
+                      foregroundColor: AppColors.primaryColor,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -831,7 +864,7 @@ class _GetStartedPage extends StatelessWidget {
                               height: 22,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.5,
-                                color: Color(0xFF3A1A60),
+                                color: AppColors.primaryColor,
                               ),
                             )
                             : const Text(
