@@ -7,6 +7,7 @@ import 'package:webreader/domain/entities/title_group.dart';
 import 'package:webreader/presentation/providers/providers.dart';
 import 'package:webreader/presentation/screens/reader_screen.dart';
 import 'package:webreader/presentation/screens/settings_screen.dart';
+import 'package:webreader/presentation/widgets/tts_control_bar.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -232,9 +233,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     final recentAsync = ref.watch(recentGroupedProvider);
     final bookmarksAsync = ref.watch(bookmarksGroupedProvider);
+    final ttsState = ref.watch(ttsProvider);
+    final playingArticle = ref.watch(
+      articleReaderProvider.select((s) => s.article),
+    );
 
     // Show the Get Started page until the user has opened at least one article.
-    if (recentAsync.hasValue && (recentAsync.value?.isEmpty ?? true)) {
+    if (recentAsync.value?.isEmpty ?? true) {
       return _GetStartedPage(
         controller: _urlController,
         isLoading: _isLoading,
@@ -365,6 +370,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ],
             ),
           ),
+          if (ttsState.isActive && playingArticle != null)
+            TtsControlBar(
+              paragraphs: playingArticle.paragraphs,
+              articleLanguage: playingArticle.language,
+              articleTitle: playingArticle.title,
+              onNavigateToReader: () async {
+                final article = playingArticle;
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ReaderScreen(article: article),
+                  ),
+                );
+                _refreshAll();
+              },
+            ),
         ],
       ),
     );
@@ -423,7 +443,7 @@ class _UrlInputBar extends StatelessWidget {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                          : const Text('Open'),
+                          : const Text('Go'),
                 ),
               ),
             ],
@@ -622,7 +642,7 @@ class _TitleAccordionState extends State<_TitleAccordion> {
   }
 }
 
-class _ArticleTile extends StatelessWidget {
+class _ArticleTile extends ConsumerWidget {
   final Article article;
   final void Function(Article) onTap;
   final void Function(Article)? onDelete;
@@ -634,8 +654,13 @@ class _ArticleTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final ttsState = ref.watch(ttsProvider);
+    final playingArticle = ref.watch(
+      articleReaderProvider.select((s) => s.article),
+    );
+    final isPlaying = ttsState.isActive && playingArticle?.url == article.url;
     return InkWell(
       onTap: () => onTap(article),
       child: Padding(
@@ -643,10 +668,16 @@ class _ArticleTile extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              article.isBookmarked ? Icons.bookmark : Icons.article_outlined,
+              isPlaying
+                  ? Icons.play_circle_outline
+                  : article.isBookmarked
+                  ? Icons.bookmark
+                  : Icons.article_outlined,
               size: 16,
               color:
-                  article.isBookmarked
+                  isPlaying
+                      ? AppColors.primaryColor
+                      : article.isBookmarked
                       ? AppColors.titleColor
                       : theme.colorScheme.primary,
             ),
@@ -847,7 +878,7 @@ class _GetStartedPage extends StatelessWidget {
                                         ),
                                       )
                                       : const Text(
-                                        'Open',
+                                        'Go',
                                         style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,

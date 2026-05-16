@@ -24,6 +24,10 @@ class TtsControlBar extends ConsumerWidget {
   final int startWordOffset;
   final void Function(int index)? onParagraphChanged;
 
+  /// When non-null, the position-text is replaced by a tappable article icon
+  /// that calls this callback (used on the home screen to navigate to reader).
+  final VoidCallback? onNavigateToReader;
+
   const TtsControlBar({
     super.key,
     required this.paragraphs,
@@ -32,6 +36,7 @@ class TtsControlBar extends ConsumerWidget {
     this.startIndex = 0,
     this.startWordOffset = 0,
     this.onParagraphChanged,
+    this.onNavigateToReader,
   });
 
   @override
@@ -171,15 +176,26 @@ class TtsControlBar extends ConsumerWidget {
                             }
                             : null,
                   ),
-                  // Position text
-                  Text(
-                    ttsState.total > 0
-                        ? '${ttsState.currentIndex + 1}/${ttsState.total}'
-                        : '~',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: AppColors.onBar),
-                  ),
+                  // Position text or navigate-to-reader icon
+                  if (onNavigateToReader != null)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.article_outlined,
+                        color: AppColors.onBar,
+                      ),
+                      tooltip: 'Go to article',
+                      onPressed: onNavigateToReader,
+                    )
+                  else
+                    Text(
+                      ttsState.total > 0
+                          ? '${ttsState.currentIndex + 1}/${ttsState.total}'
+                          : '~',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelSmall?.copyWith(color: AppColors.onBar),
+                    ),
                 ],
               ),
             ],

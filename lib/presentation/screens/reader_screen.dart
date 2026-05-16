@@ -502,7 +502,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     final isBookmarked = readerState.isBookmarked;
     final showTts = readerState.showTts;
     final showScrollToTop = readerState.showScrollToTop;
-    final autoNextCountdown = readerState.autoNextCountdown;
     final highlightedIndex = readerState.highlightedIndex;
     final savedWordOffset = readerState.savedWordOffset;
 
@@ -510,7 +509,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       onPopInvokedWithResult: (didPop, __) {
         if (didPop) {
           ref.read(articleReaderProvider.notifier).cancelAutoNext();
-          ref.read(ttsProvider.notifier).stop();
         }
         ref
             .read(articleReaderProvider.notifier)
@@ -706,8 +704,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                 spacing: 8,
                                 alignment: WrapAlignment.center,
                                 children: [
-                                  if (article.prevUrl != null &&
-                                      autoNextCountdown == null)
+                                  if (article.prevUrl != null)
                                     ElevatedButton(
                                       onPressed:
                                           isLoading
@@ -725,8 +722,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                         ],
                                       ),
                                     ),
-                                  if (article.homeUrl != null &&
-                                      autoNextCountdown == null)
+                                  if (article.homeUrl != null)
                                     ElevatedButton.icon(
                                       onPressed:
                                           isLoading
@@ -738,70 +734,24 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                       label: const Text('Home'),
                                     ),
                                   if (article.nextUrl != null)
-                                    if (autoNextCountdown != null)
-                                      Row(
+                                    ElevatedButton(
+                                      onPressed:
+                                          isLoading
+                                              ? null
+                                              : () => _navigateToUrl(
+                                                article.nextUrl,
+                                                resetProgress: true,
+                                                markCurrentCompleted: true,
+                                              ),
+                                      child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          FilledButton(
-                                            onPressed:
-                                                isLoading
-                                                    ? null
-                                                    : () => _navigateToUrl(
-                                                      article.nextUrl,
-                                                      resetProgress: true,
-                                                      markCurrentCompleted:
-                                                          true,
-                                                    ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  'Next ($autoNextCountdown)',
-                                                ),
-                                                const SizedBox(width: 8),
-                                                const Icon(
-                                                  Icons.chevron_right,
-                                                  size: 18,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          FilledButton.icon(
-                                            onPressed:
-                                                isLoading
-                                                    ? null
-                                                    : () =>
-                                                        ref
-                                                            .read(
-                                                              articleReaderProvider
-                                                                  .notifier,
-                                                            )
-                                                            .cancelAutoNext(),
-                                            icon: const Icon(Icons.close),
-                                            label: const Text('Stop'),
-                                          ),
+                                          Text('Next'),
+                                          SizedBox(width: 8),
+                                          Icon(Icons.chevron_right, size: 18),
                                         ],
-                                      )
-                                    else
-                                      ElevatedButton(
-                                        onPressed:
-                                            isLoading
-                                                ? null
-                                                : () => _navigateToUrl(
-                                                  article.nextUrl,
-                                                  resetProgress: true,
-                                                  markCurrentCompleted: true,
-                                                ),
-                                        child: const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text('Next'),
-                                            SizedBox(width: 8),
-                                            Icon(Icons.chevron_right, size: 18),
-                                          ],
-                                        ),
                                       ),
+                                    ),
                                 ],
                               ),
                             ),

@@ -32,275 +32,302 @@ class _SettingsForm extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(settingsProvider.notifier);
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    // Section label style: small-caps, primary colour
+    Widget sectionHeader(String title) => Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        title.toUpperCase(),
+        style: tt.labelSmall?.copyWith(
+          color: cs.primary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.1,
+        ),
+      ),
+    );
+
+    // Rounded card that clips its children (so ListTiles get rounded corners)
+    Widget sectionCard(List<Widget> children) => Card(
+      margin: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       children: [
-        Text('Text-to-Speech', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 12),
-
-        // TTS Language
-        DropdownButtonFormField<String>(
-          initialValue: settings.ttsLanguage,
-          decoration: const InputDecoration(
-            labelText: 'TTS Language',
-            border: OutlineInputBorder(),
+        // ── Text-to-Speech ──────────────────────────────────────────────
+        sectionHeader('Text-to-Speech'),
+        sectionCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: DropdownButtonFormField<String>(
+              initialValue: settings.ttsLanguage,
+              decoration: const InputDecoration(labelText: 'TTS Language'),
+              items:
+                  LanguageDetector.supportedLanguages
+                      .map(
+                        (lang) =>
+                            DropdownMenuItem(value: lang, child: Text(lang)),
+                      )
+                      .toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  notifier.update(
+                    settings.copyWith(ttsLanguage: val, ttsVoice: ''),
+                  );
+                }
+              },
+            ),
           ),
-          items:
-              LanguageDetector.supportedLanguages
-                  .map(
-                    (lang) => DropdownMenuItem(value: lang, child: Text(lang)),
-                  )
-                  .toList(),
-          onChanged: (val) {
-            if (val != null) {
-              // Reset voice when language changes
-              notifier.update(
-                settings.copyWith(ttsLanguage: val, ttsVoice: ''),
-              );
-            }
-          },
-        ),
-        const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: _VoiceSelector(settings: settings),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Row(
+              children: [
+                const Text('Speed'),
+                Expanded(
+                  child: Slider(
+                    value: settings.ttsSpeed,
+                    min: 0.25,
+                    max: 2.0,
+                    divisions: 7,
+                    label: '${settings.ttsSpeed}×',
+                    onChanged:
+                        (val) =>
+                            notifier.update(settings.copyWith(ttsSpeed: val)),
+                  ),
+                ),
+                Text('${settings.ttsSpeed.toStringAsFixed(2)}×'),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text(
+              'Speed changes take effect immediately, restarting the current paragraph.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 20),
 
-        // TTS Voice
-        _VoiceSelector(settings: settings),
-        const SizedBox(height: 16),
-
-        // TTS Speed
-        Row(
-          children: [
-            const Text('Speed'),
-            Expanded(
-              child: Slider(
-                value: settings.ttsSpeed,
-                min: 0.25,
-                max: 2.0,
-                divisions: 7,
-                label: '${settings.ttsSpeed}×',
-                onChanged: (val) {
-                  notifier.update(settings.copyWith(ttsSpeed: val));
-                },
+        // ── Display ─────────────────────────────────────────────────────
+        sectionHeader('Display'),
+        sectionCard([
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: DropdownButtonFormField<ThemePreference>(
+              initialValue: settings.themePreference,
+              decoration: const InputDecoration(labelText: 'Theme'),
+              items:
+                  ThemePreference.values.map((pref) {
+                    final label = switch (pref) {
+                      ThemePreference.system => 'System default',
+                      ThemePreference.light => 'Light',
+                      ThemePreference.dark => 'Dark',
+                    };
+                    return DropdownMenuItem(value: pref, child: Text(label));
+                  }).toList(),
+              onChanged: (val) {
+                if (val != null)
+                  notifier.update(settings.copyWith(themePreference: val));
+              },
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Row(
+              children: [
+                const Text('Font size'),
+                Expanded(
+                  child: Slider(
+                    value: settings.fontSize,
+                    min: 12,
+                    max: 30,
+                    divisions: 18,
+                    label: '${settings.fontSize.round()}pt',
+                    onChanged:
+                        (val) =>
+                            notifier.update(settings.copyWith(fontSize: val)),
+                  ),
+                ),
+                Text('${settings.fontSize.round()}pt'),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Preview: The quick brown fox jumps over the lazy dog.',
+                style: TextStyle(fontSize: settings.fontSize, height: 1.7),
               ),
             ),
-            Text('${settings.ttsSpeed.toStringAsFixed(2)}×'),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Speed changes take effect immediately, restarting the current paragraph.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-        ),
-        const Divider(height: 32),
+        ]),
+        const SizedBox(height: 20),
 
-        Text('Display', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 12),
-
-        DropdownButtonFormField<ThemePreference>(
-          initialValue: settings.themePreference,
-          decoration: const InputDecoration(
-            labelText: 'Theme',
-            border: OutlineInputBorder(),
-          ),
-          items:
-              ThemePreference.values.map((pref) {
-                final label = switch (pref) {
-                  ThemePreference.system => 'System default',
-                  ThemePreference.light => 'Light',
-                  ThemePreference.dark => 'Dark',
-                };
-                return DropdownMenuItem(value: pref, child: Text(label));
-              }).toList(),
-          onChanged: (val) {
-            if (val != null) {
-              notifier.update(settings.copyWith(themePreference: val));
-            }
-          },
-        ),
-        const SizedBox(height: 16),
-
-        // Font size
-        Row(
-          children: [
-            const Text('Font size'),
-            Expanded(
-              child: Slider(
-                value: settings.fontSize,
-                min: 12,
-                max: 30,
-                divisions: 18,
-                label: '${settings.fontSize.round()}pt',
-                onChanged: (val) {
-                  notifier.update(settings.copyWith(fontSize: val));
-                },
-              ),
+        // ── Reading ──────────────────────────────────────────────────────
+        sectionHeader('Reading'),
+        sectionCard([
+          SwitchListTile(
+            title: const Text('Auto-read on open'),
+            subtitle: const Text(
+              'Automatically start reading aloud when a page is opened',
             ),
-            Text('${settings.fontSize.round()}pt'),
-          ],
-        ),
-
-        // Preview
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border.all(color: Theme.of(context).colorScheme.outline),
-            borderRadius: BorderRadius.circular(8),
+            value: settings.autoRead,
+            onChanged:
+                (val) => notifier.update(settings.copyWith(autoRead: val)),
           ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          SwitchListTile(
+            title: const Text('Auto-next page'),
+            subtitle: const Text(
+              'Automatically open the next page when reading finishes',
+            ),
+            value: settings.autoNext,
+            onChanged:
+                (val) => notifier.update(settings.copyWith(autoNext: val)),
+          ),
+        ]),
+        const SizedBox(height: 20),
+
+        // ── Highlighting ─────────────────────────────────────────────────
+        sectionHeader('Highlighting'),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
           child: Text(
-            'Preview: The quick brown fox jumps over the lazy dog.',
-            style: TextStyle(fontSize: settings.fontSize, height: 1.7),
+            'Customize how the active paragraph and word are highlighted during playback.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
         ),
-        const Divider(height: 32),
-
-        Text('Reading', style: Theme.of(context).textTheme.titleMedium),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            'Paragraph',
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        sectionCard([
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _HighlightStyleEditor(
+              colorValue: settings.paragraphHighlightColor,
+              backgroundValue: settings.paragraphHighlightBackground,
+              decoration: settings.paragraphHighlightDecoration,
+              onChanged: ({
+                required int colorValue,
+                required int? backgroundValue,
+                required HighlightDecoration decoration,
+              }) {
+                notifier.update(
+                  settings.copyWith(
+                    paragraphHighlightColor: colorValue,
+                    paragraphHighlightBackground: backgroundValue,
+                    paragraphHighlightDecoration: decoration,
+                  ),
+                );
+              },
+            ),
+          ),
+        ]),
         const SizedBox(height: 12),
-
-        // Auto-read
-        SwitchListTile(
-          title: const Text('Auto-read on open'),
-          subtitle: const Text(
-            'Automatically start reading aloud when a page is opened',
-          ),
-          value: settings.autoRead,
-          onChanged: (val) {
-            notifier.update(settings.copyWith(autoRead: val));
-          },
-        ),
-        const SizedBox(height: 8),
-
-        // Auto-next
-        SwitchListTile(
-          title: const Text('Auto-next page'),
-          subtitle: const Text(
-            'Automatically open the next page when reading finishes',
-          ),
-          value: settings.autoNext,
-          onChanged: (val) {
-            notifier.update(settings.copyWith(autoNext: val));
-          },
-        ),
-
-        const Divider(height: 32),
-
-        Text('Highlighting', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Text(
-          'Customize how the active paragraph and word are highlighted during playback.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            'Word',
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
-        const SizedBox(height: 16),
-
-        // ── Paragraph highlight ─────────────────────────────────────────
-        Text(
-          'Paragraph',
-          style: Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        _HighlightStyleEditor(
-          colorValue: settings.paragraphHighlightColor,
-          backgroundValue: settings.paragraphHighlightBackground,
-          decoration: settings.paragraphHighlightDecoration,
-          onChanged: ({
-            required int colorValue,
-            required int? backgroundValue,
-            required HighlightDecoration decoration,
-          }) {
-            notifier.update(
-              settings.copyWith(
-                paragraphHighlightColor: colorValue,
-                paragraphHighlightBackground: backgroundValue,
-                paragraphHighlightDecoration: decoration,
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-
-        // ── Word highlight ──────────────────────────────────────────────
-        Text(
-          'Word',
-          style: Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        _HighlightStyleEditor(
-          colorValue: settings.wordHighlightColor,
-          backgroundValue: settings.wordHighlightBackground,
-          decoration: settings.wordHighlightDecoration,
-          onChanged: ({
-            required int colorValue,
-            required int? backgroundValue,
-            required HighlightDecoration decoration,
-          }) {
-            notifier.update(
-              settings.copyWith(
-                wordHighlightColor: colorValue,
-                wordHighlightBackground: backgroundValue,
-                wordHighlightDecoration: decoration,
-              ),
-            );
-          },
-        ),
-
-        const Divider(height: 32),
-
-        Text('Cache', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 12),
-
-        SwitchListTile(
-          title: const Text('Enable background caching'),
-          subtitle: const Text('Pre-fetch next articles while reading'),
-          value: settings.cachingEnabled,
-          onChanged: (val) {
-            notifier.update(settings.copyWith(cachingEnabled: val));
-          },
-        ),
-        const SizedBox(height: 8),
-
-        SwitchListTile(
-          title: const Text('Cache while in background'),
-          subtitle: const Text(
-            'Continue pre-fetching when the app is minimised',
+        sectionCard([
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _HighlightStyleEditor(
+              colorValue: settings.wordHighlightColor,
+              backgroundValue: settings.wordHighlightBackground,
+              decoration: settings.wordHighlightDecoration,
+              onChanged: ({
+                required int colorValue,
+                required int? backgroundValue,
+                required HighlightDecoration decoration,
+              }) {
+                notifier.update(
+                  settings.copyWith(
+                    wordHighlightColor: colorValue,
+                    wordHighlightBackground: backgroundValue,
+                    wordHighlightDecoration: decoration,
+                  ),
+                );
+              },
+            ),
           ),
-          value: settings.cacheInBackground && settings.cachingEnabled,
-          onChanged:
-              settings.cachingEnabled
-                  ? (val) {
-                    notifier.update(settings.copyWith(cacheInBackground: val));
-                  }
-                  : null,
-        ),
-        const SizedBox(height: 8),
+        ]),
+        const SizedBox(height: 20),
 
-        ListTile(
-          leading: const Icon(Icons.history_outlined),
-          title: const Text('Cache log'),
-          subtitle: const Text('View background caching activity'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap:
-              () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const CacheLogScreen())),
-        ),
+        // ── Cache ────────────────────────────────────────────────────────
+        sectionHeader('Cache'),
+        sectionCard([
+          SwitchListTile(
+            title: const Text('Enable background caching'),
+            subtitle: const Text('Pre-fetch next articles while reading'),
+            value: settings.cachingEnabled,
+            onChanged:
+                (val) =>
+                    notifier.update(settings.copyWith(cachingEnabled: val)),
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          SwitchListTile(
+            title: const Text('Cache while in background'),
+            subtitle: const Text(
+              'Continue pre-fetching when the app is minimised',
+            ),
+            value: settings.cacheInBackground && settings.cachingEnabled,
+            onChanged:
+                settings.cachingEnabled
+                    ? (val) => notifier.update(
+                      settings.copyWith(cacheInBackground: val),
+                    )
+                    : null,
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          ListTile(
+            leading: const Icon(Icons.history_outlined),
+            title: const Text('Cache log'),
+            subtitle: const Text('View background caching activity'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CacheLogScreen()),
+                ),
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          _ClearCacheButton(),
+        ]),
+        const SizedBox(height: 20),
 
-        const SizedBox(height: 8),
-
-        _ClearCacheButton(),
-
-        const Divider(height: 32),
-
-        Text('About', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 12),
-        const _AppVersionTile(),
+        // ── About ────────────────────────────────────────────────────────
+        sectionHeader('About'),
+        sectionCard([const _AppVersionTile()]),
+        const SizedBox(height: 20),
       ],
     );
   }
@@ -385,18 +412,12 @@ class _VoiceSelector extends ConsumerWidget {
     return voicesAsync.when(
       loading:
           () => const InputDecorator(
-            decoration: InputDecoration(
-              labelText: 'Voice',
-              border: OutlineInputBorder(),
-            ),
+            decoration: InputDecoration(labelText: 'Voice'),
             child: SizedBox(height: 20, child: LinearProgressIndicator()),
           ),
       error:
           (_, __) => const InputDecorator(
-            decoration: InputDecoration(
-              labelText: 'Voice',
-              border: OutlineInputBorder(),
-            ),
+            decoration: InputDecoration(labelText: 'Voice'),
             child: Text('Voices unavailable'),
           ),
       data: (voices) {
@@ -416,10 +437,7 @@ class _VoiceSelector extends ConsumerWidget {
         return DropdownButtonFormField<String>(
           initialValue:
               voices.any((v) => v['name'] == currentVoice) ? currentVoice : '',
-          decoration: const InputDecoration(
-            labelText: 'Voice',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(labelText: 'Voice'),
           items: [
             const DropdownMenuItem(value: '', child: Text('Default (system)')),
             ...voices.map(
@@ -476,7 +494,6 @@ class _AppVersionTileState extends State<_AppVersionTile> {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.info_outline),
       title: const Text('Version'),
       trailing: Text(
@@ -608,10 +625,7 @@ class _HighlightStyleEditor extends StatelessWidget {
         // Decoration dropdown
         DropdownButtonFormField<HighlightDecoration>(
           initialValue: decoration,
-          decoration: const InputDecoration(
-            labelText: 'Decoration',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(labelText: 'Decoration'),
           items: const [
             DropdownMenuItem(
               value: HighlightDecoration.none,

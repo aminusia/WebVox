@@ -31,9 +31,6 @@ class ArticleReaderState {
   /// Whether the scroll-to-top FAB should be shown.
   final bool showScrollToTop;
 
-  /// Non-null and counting down (5→1) when auto-next navigation is pending.
-  final int? autoNextCountdown;
-
   /// When set the scroll view should jump to this fraction (0–1) on the next
   /// frame, then the notifier should be told to clear it.
   final double? savedScrollPosition;
@@ -50,7 +47,6 @@ class ArticleReaderState {
     this.savedWordOffset = 0,
     this.showTts = true,
     this.showScrollToTop = false,
-    this.autoNextCountdown,
     this.savedScrollPosition,
     this.showAutoNextSnackbar = false,
   });
@@ -63,12 +59,9 @@ class ArticleReaderState {
     int? savedWordOffset,
     bool? showTts,
     bool? showScrollToTop,
-    int? autoNextCountdown,
     // Use a sentinel to allow setting savedScrollPosition to null explicitly.
     Object? savedScrollPosition = _keep,
     bool? showAutoNextSnackbar,
-    // When true, clears autoNextCountdown to null.
-    bool clearCountdown = false,
     // When true, clears savedScrollPosition to null.
     bool clearSavedScroll = false,
   }) => ArticleReaderState(
@@ -79,8 +72,6 @@ class ArticleReaderState {
     savedWordOffset: savedWordOffset ?? this.savedWordOffset,
     showTts: showTts ?? this.showTts,
     showScrollToTop: showScrollToTop ?? this.showScrollToTop,
-    autoNextCountdown:
-        clearCountdown ? null : (autoNextCountdown ?? this.autoNextCountdown),
     savedScrollPosition:
         clearSavedScroll
             ? null
@@ -104,7 +95,6 @@ const _keep = Object();
 /// Does not depend on any render frame or BuildContext — pure Riverpod logic.
 class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
   Timer? _saveTimer;
-  Timer? _countdownTimer;
   Timer? _backgroundRetryTimer;
   String? _pendingAutoNextUrl;
   bool _autoPlayScheduled = false;
@@ -293,40 +283,25 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
         next.total > 0 &&
         next.currentIndex == next.total - 1 &&
         prev.currentIndex != next.currentIndex) {
-      // Screen is off — skip countdown and load immediately so audio continues.
+      // Screen is off — load immediately so audio continues.
       _navigateToUrlAutoNext(url: article.nextUrl);
     } else if (!isBackground &&
         prev.status != TtsStatus.idle &&
         next.status == TtsStatus.idle) {
-      _startAutoNextCountdown();
+      _triggerAutoNext();
     }
   }
 
-  void _startAutoNextCountdown() {
+  void _triggerAutoNext() {
     final article = state.article;
     final settings = ref.read(settingsProvider).valueOrNull;
     if (settings == null || !settings.autoNext) return;
     if (article?.nextUrl == null) return;
-    if (_countdownTimer != null) return; // already running
-
-    state = state.copyWith(autoNextCountdown: 5, showScrollToTop: false);
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      final next = (state.autoNextCountdown ?? 0) - 1;
-      if (next <= 0) {
-        t.cancel();
-        _countdownTimer = null;
-        state = state.copyWith(clearCountdown: true);
-        _navigateToUrlAutoNext(url: article!.nextUrl);
-      } else {
-        state = state.copyWith(autoNextCountdown: next);
-      }
-    });
+    _navigateToUrlAutoNext(url: article!.nextUrl);
   }
 
   void _cancelAutoNextInternal() {
-    _countdownTimer?.cancel();
-    _countdownTimer = null;
-    state = state.copyWith(clearCountdown: true);
+    // No countdown to cancel; retained for compatibility.
   }
 
   Future<void> _navigateToUrlAutoNext({String? url}) async {
@@ -345,6 +320,7 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
         newArticle,
         resetProgress: true,
         showAutoNextSnackbar: true,
+        forcePlay: true,
       );
     } catch (e) {
       state = state.copyWith(isLoading: false);
@@ -384,6 +360,7 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
         newArticle,
         resetProgress: true,
         showAutoNextSnackbar: true,
+        forcePlay: true,
       );
     } catch (_) {
       // Still offline — timer will fire again in 15 s.
@@ -396,6 +373,7 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
     Article article, {
     bool resetProgress = false,
     bool showAutoNextSnackbar = false,
+    bool forcePlay = false,
   }) async {
     _cancelAutoNextInternal();
     _autoPlayScheduled = false;
@@ -429,7 +407,7 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
     _maybeStartCache(article);
 
     if (resetProgress) {
-      _maybeAutoPlay();
+      _maybeAutoPlay(forcePlay: forcePlay);
     } else {
       await _restorePosition(article);
     }
@@ -456,10 +434,10 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
     }
   }
 
-  void _maybeAutoPlay({int startIndex = 0}) {
+  void _maybeAutoPlay({int startIndex = 0, bool forcePlay = false}) {
     if (_autoPlayScheduled) return;
     final autoRead = ref.read(settingsProvider).valueOrNull?.autoRead ?? true;
-    if (!autoRead) return;
+    if (!autoRead && !forcePlay) return;
     _autoPlayScheduled = true;
 
     if (ref.read(ttsProvider).isActive) return;
@@ -486,7 +464,6 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
 
   void _onDispose() {
     _saveTimer?.cancel();
-    _countdownTimer?.cancel();
     _backgroundRetryTimer?.cancel();
     // Best-effort save — ref is still valid inside onDispose.
     saveState(scrollFraction: 0);
