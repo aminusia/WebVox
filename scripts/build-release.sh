@@ -5,6 +5,27 @@ PUBSPEC="pubspec.yaml"
 DIST_DIR="dist"
 FLUTTER_APK="build/app/outputs/flutter-apk/app-release.apk"
 
+# Parse command-line options
+SKIP_VERSION_BUMP=false
+PUBLISH=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-bump|--skip-bump|stall)
+      SKIP_VERSION_BUMP=true
+      shift
+      ;;
+    --publish|publish)
+      PUBLISH=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Usage: $0 [--no-bump|--skip-bump|stall] [--publish|publish]" >&2
+      exit 1
+      ;;
+  esac
+done
+
 if [ ! -f "$PUBSPEC" ]; then
   echo "Error: $PUBSPEC not found." >&2
   exit 1
@@ -44,15 +65,23 @@ if ! echo "$version_core" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
   exit 1
 fi
 
-major_minor=${version_core%.*}
-patch=${version_core##*.}
-new_patch=$((patch + 1))
-new_version_core="${major_minor}.${new_patch}"
-new_build_number=$((build_number + 1))
-new_version="${new_version_core}+${new_build_number}"
+if [ "$SKIP_VERSION_BUMP" = false ]; then
+  major_minor=${version_core%.*}
+  patch=${version_core##*.}
+  new_patch=$((patch + 1))
+  new_version_core="${major_minor}.${new_patch}"
+  new_build_number=$((build_number + 1))
+  new_version="${new_version_core}+${new_build_number}"
 
-printf 'Bumping version %s -> %s in %s\n' "$version_string" "$new_version" "$PUBSPEC"
-perl -pi -e 's/^version: .*/version: '$new_version'/' "$PUBSPEC"
+  printf 'Bumping version %s -> %s in %s\n' "$version_string" "$new_version" "$PUBSPEC"
+  perl -pi -e 's/^version: .*/version: '$new_version'/' "$PUBSPEC"
+else
+  new_version="$version_string"
+  printf 'Skipping version bump. Using version %s\n' "$new_version"
+fi
+
+printf 'Building release Bundle...\n'
+flutter build appbundle --release
 
 printf 'Building release APK...\n'
 flutter build apk --release
@@ -69,3 +98,7 @@ cp "$FLUTTER_APK" "$DIST_DIR/${package_name}-latest.apk"
 
 printf 'Release APK copied to %s\n' "$dest"
 printf 'Also copied latest APK to %s\n' "$DIST_DIR/${package_name}-latest.apk"
+
+if [ "$PUBLISH" = true ]; then
+  fastlane android deploy_internal publish
+fi

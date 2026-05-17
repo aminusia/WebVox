@@ -1,10 +1,10 @@
 import 'package:uuid/uuid.dart';
-import 'package:webreader/core/constants/app_constants.dart';
-import 'package:webreader/data/sources/local/local_article_source.dart';
-import 'package:webreader/data/sources/remote/remote_article_source.dart';
-import 'package:webreader/domain/entities/article.dart';
-import 'package:webreader/domain/entities/title_group.dart';
-import 'package:webreader/domain/repositories/article_repository.dart';
+import 'package:webvox/core/constants/app_constants.dart';
+import 'package:webvox/data/sources/local/local_article_source.dart';
+import 'package:webvox/data/sources/remote/remote_article_source.dart';
+import 'package:webvox/domain/entities/article.dart';
+import 'package:webvox/domain/entities/title_group.dart';
+import 'package:webvox/domain/repositories/article_repository.dart';
 
 class ArticleRepositoryImpl implements ArticleRepository {
   final LocalArticleSource _local;

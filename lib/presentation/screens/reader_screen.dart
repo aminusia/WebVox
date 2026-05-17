@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webreader/core/theme/app_theme.dart';
-import 'package:webreader/domain/entities/article.dart';
-import 'package:webreader/domain/entities/reading_state.dart';
-import 'package:webreader/domain/repositories/reading_state_repository.dart';
-import 'package:webreader/presentation/providers/article_reader_notifier.dart';
-import 'package:webreader/presentation/providers/providers.dart';
-import 'package:webreader/presentation/providers/tts_notifier.dart';
-import 'package:webreader/presentation/widgets/article_content_widget.dart';
-import 'package:webreader/presentation/widgets/tts_control_bar.dart';
+import 'package:webvox/core/theme/app_theme.dart';
+import 'package:webvox/domain/entities/article.dart';
+import 'package:webvox/domain/entities/reading_state.dart';
+import 'package:webvox/domain/repositories/reading_state_repository.dart';
+import 'package:webvox/presentation/providers/article_reader_notifier.dart';
+import 'package:webvox/presentation/providers/providers.dart';
+import 'package:webvox/presentation/providers/tts_notifier.dart';
+import 'package:webvox/presentation/widgets/article_content_widget.dart';
+import 'package:webvox/presentation/widgets/tts_control_bar.dart';
 
 class ReaderScreen extends ConsumerStatefulWidget {
   final Article article;
@@ -516,6 +516,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       },
       child: Scaffold(
         appBar: AppBar(
+          titleSpacing: 0,
+          leading: BackButton(color: AppColors.onBar.withAlpha(220)),
           title: GestureDetector(
             onTap: () => _showUrlEditor(article),
             child: Row(
@@ -663,8 +665,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                           const SizedBox(height: 32),
                           Text(
                             article.title,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              height: 1.3,
+                            ),
                           ),
                           if (article.author != null ||
                               article.estimatedReadTime > 0) ...[
@@ -674,7 +680,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                 if (article.author != null) article.author!,
                                 '${article.estimatedReadTime} min read',
                               ].join(' · '),
-                              style: Theme.of(context).textTheme.bodySmall,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: AppColors.bodyColor.withAlpha(140),
+                              ),
                             ),
                           ],
                           const SizedBox(height: 32),

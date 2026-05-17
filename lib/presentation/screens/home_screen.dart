@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webreader/core/theme/app_theme.dart';
-import 'package:webreader/domain/entities/article.dart';
-import 'package:webreader/domain/entities/settings.dart';
-import 'package:webreader/domain/entities/title_group.dart';
-import 'package:webreader/presentation/providers/providers.dart';
-import 'package:webreader/presentation/screens/reader_screen.dart';
-import 'package:webreader/presentation/screens/settings_screen.dart';
-import 'package:webreader/presentation/widgets/tts_control_bar.dart';
+import 'package:webvox/core/theme/app_theme.dart';
+import 'package:webvox/domain/entities/article.dart';
+import 'package:webvox/domain/entities/settings.dart';
+import 'package:webvox/domain/entities/title_group.dart';
+import 'package:webvox/presentation/providers/providers.dart';
+import 'package:webvox/presentation/screens/reader_screen.dart';
+import 'package:webvox/presentation/screens/settings_screen.dart';
+import 'package:webvox/presentation/widgets/tts_control_bar.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -100,13 +100,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
 
       if (!mounted) return;
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => ReaderScreen(article: article)));
+      await Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => ReaderScreen(article: article),
+          transitionDuration: const Duration(milliseconds: 220),
+          reverseTransitionDuration: const Duration(milliseconds: 180),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.04),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
+                child: child,
+              ),
+            );
+          },
+        ),
+      );
       _refreshAll();
+      // Clear the input field on successful submission
+      if (mounted) {
+        _urlController.clear();
+      }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Could not load article.\n${e.toString()}');
+      setState(() => _error = 'We couldn\'t load the article from this URL.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -139,9 +164,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     //   );
     // }
 
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => ReaderScreen(article: article)));
+    await Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => ReaderScreen(article: article),
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 180),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.04),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
     _refreshAll();
   }
 
@@ -253,7 +296,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/appicon.png', width: 24, height: 24),
+            Image.asset('assets/appicon-32.png', width: 24, height: 24),
             const SizedBox(width: 8),
             const Text(
               'WebReader',
@@ -290,6 +333,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           TabBar(
             controller: _tabController,
             tabs: const [Tab(text: 'Recent'), Tab(text: 'Bookmarks')],
+            labelColor: AppColors.primaryColor,
+            unselectedLabelColor: AppColors.barColor,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400),
+            indicator: const UnderlineTabIndicator(
+              borderSide: BorderSide(color: AppColors.primaryColor, width: 2.5),
+            ),
+            indicatorSize: TabBarIndicatorSize.label,
+            dividerColor: Colors.transparent,
           ),
           Expanded(
             child: TabBarView(
@@ -301,33 +353,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   loading:
                       () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('$e')),
-                  data:
-                      (groups) =>
-                          groups.isEmpty
-                              ? const _EmptyState()
-                              : _GroupedList(
-                                groups: groups,
-                                expandedTitleId: _expandedRecentTitleId,
-                                onToggle:
-                                    (id) => setState(
-                                      () =>
-                                          _expandedRecentTitleId =
-                                              _expandedRecentTitleId == id
-                                                  ? null
-                                                  : id,
-                                    ),
-                                onArticleTap: _openArticle,
-                                onRenameTitle:
-                                    (g) => _showRenameTitleDialog(
-                                      g,
-                                      isBookmarks: false,
-                                    ),
-                                onDeleteTitle:
-                                    (g) => _confirmDeleteTitle(
-                                      g,
-                                      isBookmarks: false,
-                                    ),
+                  data: (groups) {
+                    // Auto-expand first group on initial load
+                    if (groups.isNotEmpty && _expandedRecentTitleId == null) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(
+                            () => _expandedRecentTitleId = groups.first.titleId,
+                          );
+                        }
+                      });
+                    }
+                    return groups.isEmpty
+                        ? const _EmptyState()
+                        : _GroupedList(
+                          groups: groups,
+                          expandedTitleId: _expandedRecentTitleId,
+                          onToggle:
+                              (id) => setState(
+                                () =>
+                                    _expandedRecentTitleId =
+                                        _expandedRecentTitleId == id
+                                            ? null
+                                            : id,
                               ),
+                          onArticleTap: _openArticle,
+                          onRenameTitle:
+                              (g) =>
+                                  _showRenameTitleDialog(g, isBookmarks: false),
+                          onDeleteTitle:
+                              (g) => _confirmDeleteTitle(g, isBookmarks: false),
+                        );
+                  },
                 ),
                 // Bookmarks tab
                 bookmarksAsync.when(
@@ -335,37 +392,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   loading:
                       () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('$e')),
-                  data:
-                      (groups) =>
-                          groups.isEmpty
-                              ? const Center(child: Text('No bookmarks yet'))
-                              : _GroupedList(
-                                groups: groups,
-                                expandedTitleId: _expandedBookmarkTitleId,
-                                onToggle:
-                                    (id) => setState(
-                                      () =>
-                                          _expandedBookmarkTitleId =
-                                              _expandedBookmarkTitleId == id
-                                                  ? null
-                                                  : id,
-                                    ),
-                                onArticleTap: _openArticle,
-                                onRenameTitle:
-                                    (g) => _showRenameTitleDialog(
-                                      g,
-                                      isBookmarks: true,
-                                    ),
-                                onDeleteTitle:
-                                    (g) => _confirmDeleteTitle(
-                                      g,
-                                      isBookmarks: true,
-                                    ),
-                                onDeleteArticle:
-                                    (a) => ref
-                                        .read(bookmarksGroupedProvider.notifier)
-                                        .removeArticle(a.id),
+                  data: (groups) {
+                    // Auto-expand first group on initial load
+                    if (groups.isNotEmpty && _expandedBookmarkTitleId == null) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(
+                            () =>
+                                _expandedBookmarkTitleId = groups.first.titleId,
+                          );
+                        }
+                      });
+                    }
+                    return groups.isEmpty
+                        ? const Center(child: Text('No bookmarks yet'))
+                        : _GroupedList(
+                          groups: groups,
+                          expandedTitleId: _expandedBookmarkTitleId,
+                          onToggle:
+                              (id) => setState(
+                                () =>
+                                    _expandedBookmarkTitleId =
+                                        _expandedBookmarkTitleId == id
+                                            ? null
+                                            : id,
                               ),
+                          onArticleTap: _openArticle,
+                          onRenameTitle:
+                              (g) =>
+                                  _showRenameTitleDialog(g, isBookmarks: true),
+                          onDeleteTitle:
+                              (g) => _confirmDeleteTitle(g, isBookmarks: true),
+                          onDeleteArticle:
+                              (a) => ref
+                                  .read(bookmarksGroupedProvider.notifier)
+                                  .removeArticle(a.id),
+                        );
+                  },
                 ),
               ],
             ),
@@ -408,45 +471,61 @@ class _UrlInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: 'Paste new URL to read…',
-                  prefixIcon: const Icon(Icons.link),
-                  // Reserve space so text doesn't slide under the button.
-                  suffixIcon: const SizedBox(width: 88),
-                  border: const OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(30)),
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: const BorderRadius.all(Radius.circular(24)),
+              border: Border.all(color: Colors.white.withAlpha(18)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryColor.withAlpha(18),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    hintText: 'Paste new URL to read…',
+                    prefixIcon: Icon(Icons.link),
+                    suffixIcon: SizedBox(width: 88),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    isDense: true,
+                    filled: false,
                   ),
-                  isDense: true,
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.go,
+                  onSubmitted: isLoading ? null : onSubmit,
                 ),
-                keyboardType: TextInputType.url,
-                textInputAction: TextInputAction.go,
-                onSubmitted: isLoading ? null : onSubmit,
-              ),
-              Positioned(
-                right: 6,
-                child: FilledButton(
-                  onPressed: isLoading ? null : () => onSubmit(controller.text),
-                  child:
-                      isLoading
-                          ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : const Text('Go'),
+                Positioned(
+                  right: 6,
+                  child: FilledButton(
+                    onPressed:
+                        isLoading ? null : () => onSubmit(controller.text),
+                    child:
+                        isLoading
+                            ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Text('Go'),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           if (error != null) ...[
             const SizedBox(height: 6),
@@ -664,34 +743,44 @@ class _ArticleTile extends ConsumerWidget {
     return InkWell(
       onTap: () => onTap(article),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(44, 6, 4, 6),
+        padding: const EdgeInsets.fromLTRB(32, 10, 4, 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            Icon(
-              isPlaying
-                  ? Icons.play_circle_outline
-                  : article.isBookmarked
-                  ? Icons.bookmark
-                  : Icons.article_outlined,
-              size: 16,
-              color:
-                  isPlaying
-                      ? AppColors.primaryColor
-                      : article.isBookmarked
-                      ? AppColors.titleColor
-                      : theme.colorScheme.primary,
+            Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Icon(
+                isPlaying
+                    ? Icons.play_circle_outline
+                    : article.isBookmarked
+                    ? Icons.bookmark
+                    : Icons.article_outlined,
+                size: 16,
+                color:
+                    isPlaying
+                        ? AppColors.primaryColor
+                        : article.isBookmarked
+                        ? AppColors.titleColor
+                        : theme.colorScheme.primary,
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                article.title,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.primary,
-                  decoration: TextDecoration.underline,
-                  decorationColor: theme.colorScheme.primary.withAlpha(120),
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    article.title,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: 4),
+                ],
               ),
             ),
             if (onDelete != null)
@@ -761,8 +850,8 @@ class _GetStartedPage extends StatelessWidget {
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: const LinearGradient(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
             begin: Alignment(0.68, -0.73),
             end: Alignment(-0.68, 0.73),
             colors: [
@@ -779,7 +868,7 @@ class _GetStartedPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
 
                 const Text(
                   'WebReader',
@@ -801,7 +890,7 @@ class _GetStartedPage extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
                 Image.asset(
                   'assets/hero-image.png',
@@ -809,7 +898,7 @@ class _GetStartedPage extends StatelessWidget {
                   fit: BoxFit.contain,
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -831,7 +920,9 @@ class _GetStartedPage extends StatelessWidget {
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(30),
-                                borderSide: BorderSide(color: Colors.white54),
+                                borderSide: BorderSide(
+                                  color: Colors.white.withAlpha(64),
+                                ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(30),

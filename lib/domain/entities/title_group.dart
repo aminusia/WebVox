@@ -1,4 +1,4 @@
-import 'package:webreader/domain/entities/article.dart';
+import 'package:webvox/domain/entities/article.dart';
 
 /// A group of [Article]s that share the same book / series title.
 class TitleGroup {

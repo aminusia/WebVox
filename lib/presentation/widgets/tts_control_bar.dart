@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webreader/core/theme/app_theme.dart';
-import 'package:webreader/presentation/providers/providers.dart';
-import 'package:webreader/presentation/providers/tts_notifier.dart';
+import 'package:webvox/core/theme/app_theme.dart';
+import 'package:webvox/presentation/providers/providers.dart';
+import 'package:webvox/presentation/providers/tts_notifier.dart';
 
 /// Returns a human-readable label from a raw TTS voice name.
 /// E.g. "en-us-x-sfg#female_1-local" → "female_1"
@@ -60,145 +60,216 @@ class TtsControlBar extends ConsumerWidget {
 
     return Theme(
       data: barTheme,
-      child: Card(
-        color: AppColors.barColor,
+      child: Container(
         margin: const EdgeInsets.only(left: 12, right: 12, bottom: 8),
-        elevation: 4,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (ttsState.total > 0)
-                LinearProgressIndicator(
-                  value: (ttsState.currentIndex + 1) / ttsState.total,
-                  minHeight: 2,
-                ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Speed selector
-                  // _SpeedButton(
-                  //   speed: ttsState.speed,
-                  //   onChanged: notifier.setSpeed,
-                  // ),
-                  // Voice selector (inline, compact)
-                  voicesAsync.maybeWhen(
-                    data: (voices) {
-                      if (voices.isEmpty) return const SizedBox.shrink();
-                      return _VoiceButton(
-                        voices: voices,
-                        currentVoice: ttsState.voiceName,
-                        language: articleLanguage,
-                      );
-                    },
-                    orElse: () => const SizedBox.shrink(),
-                  ),
-                  // Skip previous
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(
-                      Icons.skip_previous_rounded,
-                      color: AppColors.onBar,
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.all(Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(90),
+              blurRadius: 24,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Card(
+          color: AppColors.barColor,
+          margin: EdgeInsets.zero,
+          elevation: 8,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(24)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (ttsState.total > 0)
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
                     ),
-                    tooltip: 'Previous paragraph',
-                    onPressed:
-                        ttsState.isActive
-                            ? () {
-                              HapticFeedback.mediumImpact();
-                              notifier.skipPrevious();
-                            }
-                            : null,
-                  ),
-                  // Play / Pause
-                  if (!ttsState.isActive)
-                    FilledButton.icon(
-                      icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                      label: const Text('Read'),
-                      style: FilledButton.styleFrom(
-                        foregroundColor: AppColors.onBar,
-                        backgroundColor: AppColors.primaryColor,
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: LinearProgressIndicator(
+                      value: (ttsState.currentIndex + 1) / ttsState.total,
+                      minHeight: 4,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryColor,
                       ),
-                      onPressed: () {
-                        HapticFeedback.mediumImpact();
-                        notifier.play(
-                          paragraphs,
-                          startIndex: startIndex,
-                          wordOffset: startWordOffset,
+                      backgroundColor: Colors.white12,
+                    ),
+                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Speed selector
+                    // _SpeedButton(
+                    //   speed: ttsState.speed,
+                    //   onChanged: notifier.setSpeed,
+                    // ),
+                    // Voice selector (inline, compact)
+                    voicesAsync.maybeWhen(
+                      data: (voices) {
+                        if (voices.isEmpty) return const SizedBox.shrink();
+                        return _VoiceButton(
+                          voices: voices,
+                          currentVoice: ttsState.voiceName,
                           language: articleLanguage,
-                          articleTitle: articleTitle,
                         );
                       },
-                    )
-                  else if (ttsState.isPlaying)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(
-                        Icons.pause_rounded,
-                        color: AppColors.onBar,
+                      orElse: () => const SizedBox.shrink(),
+                    ),
+                    // Skip previous
+                    Opacity(
+                      opacity: ttsState.isActive ? 0.85 : 0.4,
+                      child: IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(
+                          Icons.skip_previous_rounded,
+                          color: AppColors.onBar,
+                          size: 20,
+                        ),
+                        tooltip: 'Previous paragraph',
+                        onPressed:
+                            ttsState.isActive
+                                ? () {
+                                  HapticFeedback.mediumImpact();
+                                  notifier.skipPrevious();
+                                }
+                                : null,
                       ),
-                      tooltip: 'Pause',
-                      color: AppColors.onBar,
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        notifier.pause();
+                    ),
+                    // Play / Pause
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(
+                        begin: 0,
+                        end: ttsState.isPlaying ? 1.0 : 0.0,
+                      ),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeInOut,
+                      builder: (context, glowValue, child) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow:
+                                glowValue > 0
+                                    ? [
+                                      BoxShadow(
+                                        color: AppColors.primaryColor.withAlpha(
+                                          (glowValue * 100).round(),
+                                        ),
+                                        blurRadius: glowValue * 20,
+                                        spreadRadius: glowValue * 2,
+                                      ),
+                                    ]
+                                    : null,
+                          ),
+                          child: child,
+                        );
                       },
-                    )
-                  else
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(
-                        Icons.play_arrow_rounded,
-                        color: AppColors.onBar,
+                      child: Builder(
+                        builder: (context) {
+                          if (!ttsState.isActive) {
+                            return FilledButton.icon(
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                size: 18,
+                              ),
+                              label: const Text('Read'),
+                              style: FilledButton.styleFrom(
+                                foregroundColor: AppColors.onBar,
+                                backgroundColor: AppColors.primaryColor,
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                              ),
+                              onPressed: () {
+                                HapticFeedback.mediumImpact();
+                                notifier.play(
+                                  paragraphs,
+                                  startIndex: startIndex,
+                                  wordOffset: startWordOffset,
+                                  language: articleLanguage,
+                                  articleTitle: articleTitle,
+                                );
+                              },
+                            );
+                          } else if (ttsState.isPlaying) {
+                            return IconButton(
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(
+                                Icons.pause_rounded,
+                                color: AppColors.onBar,
+                              ),
+                              tooltip: 'Pause',
+                              color: AppColors.onBar,
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                notifier.pause();
+                              },
+                            );
+                          } else {
+                            return IconButton(
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(
+                                Icons.play_arrow_rounded,
+                                color: AppColors.onBar,
+                              ),
+                              tooltip: 'Resume',
+                              color: AppColors.onBar,
+                              onPressed: () {
+                                HapticFeedback.mediumImpact();
+                                notifier.resume();
+                              },
+                            );
+                          }
+                        },
                       ),
-                      tooltip: 'Resume',
-                      color: AppColors.onBar,
-                      onPressed: () {
-                        HapticFeedback.mediumImpact();
-                        notifier.resume();
-                      },
                     ),
-                  // Skip next
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(
-                      Icons.skip_next_rounded,
-                      color: AppColors.onBar,
-                    ),
-                    tooltip: 'Next paragraph',
-                    onPressed:
-                        ttsState.isActive
-                            ? () {
-                              HapticFeedback.mediumImpact();
-                              notifier.skipNext();
-                            }
-                            : null,
-                  ),
-                  // Position text or navigate-to-reader icon
-                  if (onNavigateToReader != null)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(
-                        Icons.article_outlined,
-                        color: AppColors.onBar,
+                    // Skip next
+                    Opacity(
+                      opacity: ttsState.isActive ? 0.85 : 0.4,
+                      child: IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(
+                          Icons.skip_next_rounded,
+                          color: AppColors.onBar,
+                          size: 20,
+                        ),
+                        tooltip: 'Next paragraph',
+                        onPressed:
+                            ttsState.isActive
+                                ? () {
+                                  HapticFeedback.mediumImpact();
+                                  notifier.skipNext();
+                                }
+                                : null,
                       ),
-                      tooltip: 'Go to article',
-                      onPressed: onNavigateToReader,
-                    )
-                  else
-                    Text(
-                      ttsState.total > 0
-                          ? '${ttsState.currentIndex + 1}/${ttsState.total}'
-                          : '~',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelSmall?.copyWith(color: AppColors.onBar),
                     ),
-                ],
-              ),
-            ],
+                    // Position text or navigate-to-reader icon
+                    if (onNavigateToReader != null)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(
+                          Icons.article_outlined,
+                          color: AppColors.onBar,
+                        ),
+                        tooltip: 'Go to article',
+                        onPressed: onNavigateToReader,
+                      )
+                    else
+                      Text(
+                        ttsState.total > 0
+                            ? '${ttsState.currentIndex + 1}/${ttsState.total}'
+                            : '~',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.onBar,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

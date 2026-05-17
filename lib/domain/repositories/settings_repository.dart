@@ -1,4 +1,4 @@
-import 'package:webreader/domain/entities/settings.dart';
+import 'package:webvox/domain/entities/settings.dart';
 
 abstract class SettingsRepository {
   Future<Settings> getSettings();

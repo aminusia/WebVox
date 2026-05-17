@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:webreader/core/utils/language_detector.dart';
-import 'package:webreader/domain/entities/settings.dart';
-import 'package:webreader/presentation/providers/providers.dart';
-import 'package:webreader/presentation/screens/cache_log_screen.dart';
+import 'package:webvox/core/utils/language_detector.dart';
+import 'package:webvox/domain/entities/settings.dart';
+import 'package:webvox/presentation/providers/providers.dart';
+import 'package:webvox/presentation/screens/cache_log_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -52,7 +52,7 @@ class _SettingsForm extends ConsumerWidget {
     Widget sectionCard(List<Widget> children) => Card(
       margin: EdgeInsets.zero,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+        borderRadius: BorderRadius.all(Radius.circular(24)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -92,7 +92,7 @@ class _SettingsForm extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: _VoiceSelector(settings: settings),
           ),
-          const Divider(height: 1),
+          Divider(height: 1, color: Colors.white.withAlpha(15)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Row(
@@ -142,12 +142,13 @@ class _SettingsForm extends ConsumerWidget {
                     return DropdownMenuItem(value: pref, child: Text(label));
                   }).toList(),
               onChanged: (val) {
-                if (val != null)
+                if (val != null) {
                   notifier.update(settings.copyWith(themePreference: val));
+                }
               },
             ),
           ),
-          const Divider(height: 1),
+          Divider(height: 1, color: Colors.white.withAlpha(15)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Row(

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:webreader/domain/repositories/settings_repository.dart';
+import 'package:webvox/domain/repositories/settings_repository.dart';
 
 // ─── Status ──────────────────────────────────────────────────────────────────
 
@@ -276,7 +276,7 @@ class TtsAudioHandler extends BaseAudioHandler {
         MediaItem(
           id: startIndex.toString(),
           title: articleTitle,
-          artist: 'WebReader',
+          artist: 'WebVox',
           duration: Duration(seconds: paragraphs.length),
         ),
       );
@@ -318,7 +318,7 @@ class TtsAudioHandler extends BaseAudioHandler {
         MediaItem(
           id: '0',
           title: articleTitle,
-          artist: 'WebReader',
+          artist: 'WebVox',
           duration: Duration(seconds: paragraphs.length),
         ),
       );

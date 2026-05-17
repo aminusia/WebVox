@@ -1,4 +1,4 @@
-import 'package:webreader/domain/entities/reading_state.dart';
+import 'package:webvox/domain/entities/reading_state.dart';
 
 abstract class ReadingStateRepository {
   Future<ReadingState?> getReadingState(String articleId);

@@ -1,18 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webreader/core/services/article_cache_service.dart';
-import 'package:webreader/data/repositories/article_repository_impl.dart';
-import 'package:webreader/data/repositories/reading_state_repository_impl.dart';
-import 'package:webreader/data/repositories/settings_repository_impl.dart';
-import 'package:webreader/domain/entities/article.dart';
-import 'package:webreader/domain/entities/settings.dart';
-import 'package:webreader/domain/entities/title_group.dart';
-import 'package:webreader/domain/repositories/article_repository.dart';
-import 'package:webreader/domain/repositories/reading_state_repository.dart';
-import 'package:webreader/domain/repositories/settings_repository.dart';
-import 'package:webreader/presentation/providers/article_reader_notifier.dart';
-import 'package:webreader/presentation/providers/tts_notifier.dart';
+import 'package:webvox/core/services/article_cache_service.dart';
+import 'package:webvox/data/repositories/article_repository_impl.dart';
+import 'package:webvox/data/repositories/reading_state_repository_impl.dart';
+import 'package:webvox/data/repositories/settings_repository_impl.dart';
+import 'package:webvox/domain/entities/article.dart';
+import 'package:webvox/domain/entities/settings.dart';
+import 'package:webvox/domain/entities/title_group.dart';
+import 'package:webvox/domain/repositories/article_repository.dart';
+import 'package:webvox/domain/repositories/reading_state_repository.dart';
+import 'package:webvox/domain/repositories/settings_repository.dart';
+import 'package:webvox/presentation/providers/article_reader_notifier.dart';
+import 'package:webvox/presentation/providers/tts_notifier.dart';
 
 // ─── Repositories ────────────────────────────────────────────────────────────
 

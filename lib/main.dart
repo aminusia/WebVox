@@ -4,13 +4,13 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
-import 'package:webreader/core/theme/app_theme.dart';
-import 'package:webreader/data/database/app_database.dart';
-import 'package:webreader/domain/entities/settings.dart';
-import 'package:webreader/presentation/providers/providers.dart';
-import 'package:webreader/presentation/providers/tts_notifier.dart';
-import 'package:webreader/presentation/screens/home_screen.dart';
-import 'package:webreader/presentation/screens/reader_screen.dart';
+import 'package:webvox/core/theme/app_theme.dart';
+import 'package:webvox/data/database/app_database.dart';
+import 'package:webvox/domain/entities/settings.dart';
+import 'package:webvox/presentation/providers/providers.dart';
+import 'package:webvox/presentation/providers/tts_notifier.dart';
+import 'package:webvox/presentation/screens/home_screen.dart';
+import 'package:webvox/presentation/screens/reader_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,7 +48,7 @@ class _AppInitializerState extends State<_AppInitializer> {
         builder: () => TtsAudioHandler(),
         config: const AudioServiceConfig(
           androidNotificationChannelId: 'app.alkyo.webreader.tts',
-          androidNotificationChannelName: 'WebReader TTS',
+          androidNotificationChannelName: 'WebVox TTS',
           androidNotificationOngoing: false,
           rewindInterval: Duration(seconds: 10),
           fastForwardInterval: Duration(seconds: 10),
@@ -56,7 +56,7 @@ class _AppInitializerState extends State<_AppInitializer> {
       );
     } catch (e) {
       // Notification controls won't work, but TTS still functions normally.
-      debugPrint('[WebReader] AudioService.init failed: $e');
+      debugPrint('[WebVox] AudioService.init failed: $e');
       handler = TtsAudioHandler();
     }
     if (mounted) setState(() => _handler = handler);
@@ -147,10 +147,17 @@ class _ShareIntentWrapperState extends ConsumerState<_ShareIntentWrapper> {
     try {
       final article = await repo.fetchArticle(url);
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(url);
+      // Mark article as read to add it to recent history
+      await repo.markArticleRead(article.id);
+      // Refresh recent articles provider
       ref.read(recentArticlesProvider.notifier).load();
-      _navigatorKey.currentState?.push(
+      ref.read(recentGroupedProvider.notifier).load();
+      await _navigatorKey.currentState?.push(
         MaterialPageRoute(builder: (_) => ReaderScreen(article: article)),
       );
+      // Refresh again after returning from reader to update any state changes
+      ref.read(recentArticlesProvider.notifier).load();
+      ref.read(recentGroupedProvider.notifier).load();
     } catch (_) {}
   }
 
@@ -170,7 +177,7 @@ class _ShareIntentWrapperState extends ConsumerState<_ShareIntentWrapper> {
 
     return MaterialApp(
       navigatorKey: _navigatorKey,
-      title: 'WebReader',
+      title: 'WebVox',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

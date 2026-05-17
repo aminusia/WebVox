@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:webreader/core/constants/app_constants.dart';
-import 'package:webreader/domain/entities/settings.dart';
+import 'package:webvox/core/constants/app_constants.dart';
+import 'package:webvox/domain/entities/settings.dart';
 
 class LocalSettingsSource {
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();

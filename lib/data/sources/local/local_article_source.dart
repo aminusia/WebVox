@@ -1,9 +1,9 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
-import 'package:webreader/core/utils/title_extractor.dart';
-import 'package:webreader/data/database/app_database.dart';
-import 'package:webreader/domain/entities/article.dart';
-import 'package:webreader/domain/entities/title_group.dart';
+import 'package:webvox/core/utils/title_extractor.dart';
+import 'package:webvox/data/database/app_database.dart';
+import 'package:webvox/domain/entities/article.dart';
+import 'package:webvox/domain/entities/title_group.dart';
 
 class LocalArticleSource {
   Future<Database> get _db => AppDatabase.instance.database;

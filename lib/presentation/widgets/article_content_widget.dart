@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:webreader/domain/entities/settings.dart';
+import 'package:webvox/domain/entities/settings.dart';
 
 /// Resolved Flutter-level highlight style, converted from [Settings] fields.
 class HighlightStyle {
@@ -14,12 +14,13 @@ class HighlightStyle {
   });
 
   static const HighlightStyle defaultParagraph = HighlightStyle(
-    color: Color(0xFF2196F3), // Colors.blue
+    color: Color(0xFF5B7FFF),
+    backgroundColor: Color(0x1A5B7FFF),
     decoration: TextDecoration.none,
   );
 
   static const HighlightStyle defaultWord = HighlightStyle(
-    color: Color(0xFFB8860B),
+    color: Color(0xFFCFB75A),
     decoration: TextDecoration.underline,
   );
 

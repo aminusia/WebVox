@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:webreader/domain/entities/article.dart';
-import 'package:webreader/presentation/providers/providers.dart';
-import 'package:webreader/presentation/screens/reader_screen.dart';
+import 'package:webvox/domain/entities/article.dart';
+import 'package:webvox/presentation/providers/providers.dart';
+import 'package:webvox/presentation/screens/reader_screen.dart';
 
 class BookmarksScreen extends ConsumerWidget {
   const BookmarksScreen({super.key});

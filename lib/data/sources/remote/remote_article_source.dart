@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:webreader/core/constants/app_constants.dart';
-import 'package:webreader/core/utils/html_parser.dart';
+import 'package:webvox/core/constants/app_constants.dart';
+import 'package:webvox/core/utils/html_parser.dart';
 
 class RemoteArticleSource {
   final HtmlParser _parser;
@@ -16,7 +16,7 @@ class RemoteArticleSource {
         .get(
           uri,
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10) WebReader/1.0',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10) WebVox/1.0',
             'Accept':
                 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',

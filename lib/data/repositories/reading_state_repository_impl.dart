@@ -1,6 +1,6 @@
-import 'package:webreader/data/sources/local/local_reading_state_source.dart';
-import 'package:webreader/domain/entities/reading_state.dart';
-import 'package:webreader/domain/repositories/reading_state_repository.dart';
+import 'package:webvox/data/sources/local/local_reading_state_source.dart';
+import 'package:webvox/domain/entities/reading_state.dart';
+import 'package:webvox/domain/repositories/reading_state_repository.dart';
 
 class ReadingStateRepositoryImpl implements ReadingStateRepository {
   final LocalReadingStateSource _source;

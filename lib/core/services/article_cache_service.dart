@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:webreader/domain/entities/article.dart';
-import 'package:webreader/domain/repositories/article_repository.dart';
+import 'package:webvox/domain/entities/article.dart';
+import 'package:webvox/domain/repositories/article_repository.dart';
 
 /// Background service that proactively caches upcoming (next) articles
 /// while the user is reading.
