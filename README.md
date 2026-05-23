@@ -15,6 +15,9 @@
 
 <p align="center">
   <a href="https://play.google.com/store/apps/details?id=app.alkyo.webreader&hl=en">Download WebVox on Google Play</a>
+  <br/>
+  <br/>
+  <a href="https://webfox.alkyo.app">Visit webfox.alkyo.app</a>
 </p>
 
 ---

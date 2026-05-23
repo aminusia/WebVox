@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebVox – Listen to Any Web Article</title>
+  <meta name="description" content="WebVox transforms cluttered websites into beautiful reader mode pages and reads them aloud using Android's built-in text-to-speech engine." />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/appicon-32.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080820;
+      --bg2:       #0d0d30;
+      --card:      #111138;
+      --blue:      #5b5ef4;
+      --blue-glow: #5b5ef466;
+      --orange:    #ff7033;
+      --orange2:   #ff9a5c;
+      --white:     #ffffff;
+      --muted:     #8a8ab8;
+      --border:    #ffffff12;
+      --radius:    20px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--white);
+      overflow-x: hidden;
+    }
+
+    /* ─── CANVAS BACKGROUND ─────────────────────────────── */
+    #star-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ─── NAV ───────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 6%;
+      background: rgba(8, 8, 32, 0.6);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      transition: background 0.3s;
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .nav-logo svg { width: 32px; height: 32px; }
+    .nav-links { display: flex; gap: 32px; }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--white); }
+    .nav-cta {
+      background: var(--blue);
+      color: var(--white);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 9px 20px;
+      border-radius: 50px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 0 20px var(--blue-glow);
+    }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 0 32px var(--blue-glow); }
+
+    /* ─── SECTIONS WRAPPER ──────────────────────────────── */
+    section { position: relative; z-index: 1; }
+
+    /* ─── HERO ──────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 140px 6% 80px;
+      overflow: hidden;
+    }
+
+    /* animated gradient orbs */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.35;
+      animation: orb-drift 12s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+    .orb-1 { width: 700px; height: 700px; background: radial-gradient(circle, #5b5ef4 0%, transparent 70%); top: -200px; left: -200px; animation-delay: 0s; }
+    .orb-2 { width: 500px; height: 500px; background: radial-gradient(circle, #ff7033 0%, transparent 70%); bottom: -100px; right: -100px; animation-delay: -4s; }
+    .orb-3 { width: 400px; height: 400px; background: radial-gradient(circle, #8080ff 0%, transparent 70%); top: 40%; left: 50%; animation-delay: -8s; }
+
+    @keyframes orb-drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(40px, 30px) scale(1.08); }
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(91, 94, 244, 0.15);
+      border: 1px solid rgba(91, 94, 244, 0.4);
+      border-radius: 50px;
+      padding: 6px 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #9a9cf8;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+      animation: fade-up 0.8s both;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px;
+      background: var(--orange);
+      border-radius: 50%;
+      animation: pulse-dot 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%       { transform: scale(1.5); opacity: 0.6; }
+    }
+
+    .hero-title {
+      font-size: clamp(2.8rem, 7vw, 5.5rem);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+      animation: fade-up 0.8s 0.1s both;
+    }
+    .hero-title .accent { color: var(--orange); }
+    .hero-title .blue-accent { color: #8a8cf8; }
+
+    .hero-sub {
+      font-size: clamp(1rem, 2.2vw, 1.25rem);
+      color: var(--muted);
+      max-width: 620px;
+      line-height: 1.7;
+      margin: 0 auto 40px;
+      animation: fade-up 0.8s 0.2s both;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 70px;
+      animation: fade-up 0.8s 0.3s both;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(135deg, var(--blue), #7c7fff);
+      color: var(--white);
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 14px 30px;
+      border-radius: 50px;
+      box-shadow: 0 0 40px rgba(91,94,244,0.5);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 60px rgba(91,94,244,0.7); }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      color: var(--white);
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 14px 28px;
+      border-radius: 50px;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+
+    /* hero image with parallax layers */
+    .hero-image-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 960px;
+      margin: 0 auto;
+      animation: fade-up 0.8s 0.4s both;
+    }
+    .hero-image-wrap img.hero-main {
+      width: 100%;
+      border-radius: 24px;
+      box-shadow: 0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+    }
+
+    /* floating stats pills */
+    .floating-pill {
+      position: absolute;
+      background: rgba(17,17,56,0.9);
+      border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(16px);
+      border-radius: 50px;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      animation: float 4s ease-in-out infinite;
+    }
+    .floating-pill .pill-icon { font-size: 1.2rem; }
+    .floating-pill.p1 { top: 10%; left: -5%; animation-delay: 0s; }
+    .floating-pill.p2 { bottom: 18%; right: -5%; animation-delay: -1.5s; }
+    .floating-pill.p3 { top: 28%; right: -8%; animation-delay: -0.8s; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-10px); }
+    }
+
+    /* waveform decoration */
+    .wave-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      justify-content: center;
+      margin: -20px 0 40px;
+      height: 40px;
+    }
+    .wave-bar {
+      width: 3px;
+      background: linear-gradient(to top, var(--blue), var(--orange));
+      border-radius: 3px;
+      animation: wave-anim var(--dur, 1.2s) ease-in-out infinite alternate;
+      transform-origin: bottom;
+    }
+    @keyframes wave-anim {
+      from { height: 4px; opacity: 0.4; }
+      to   { height: var(--h, 30px); opacity: 1; }
+    }
+
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(30px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── STATS STRIP ───────────────────────────────────── */
+    #stats {
+      padding: 60px 6%;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-grid {
+      display: flex;
+      justify-content: center;
+      gap: 80px;
+      flex-wrap: wrap;
+    }
+    .stat-item { text-align: center; }
+    .stat-num {
+      font-size: 2.6rem;
+      font-weight: 900;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, var(--white), #8a8cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .stat-label { font-size: 0.85rem; color: var(--muted); margin-top: 4px; font-weight: 500; }
+
+    /* ─── FEATURE SECTIONS ──────────────────────────────── */
+    #features { padding: 100px 6%; }
+
+    .section-label {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.7;
+      max-width: 500px;
+    }
+
+    .feature-block {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+      margin-bottom: 120px;
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .feature-block.visible { opacity: 1; transform: translateY(0); }
+    .feature-block.reverse { direction: rtl; }
+    .feature-block.reverse > * { direction: ltr; }
+
+    .feature-phone {
+      position: relative;
+      display: flex;
+      justify-content: center;
+    }
+    .feature-phone img {
+      width: 280px;
+      max-width: 100%;
+      border-radius: 30px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+      transition: transform 0.4s ease;
+    }
+    .feature-phone:hover img { transform: translateY(-8px) scale(1.01); }
+    .feature-phone::before {
+      content: '';
+      position: absolute;
+      inset: -30px;
+      background: radial-gradient(ellipse at center, rgba(91,94,244,0.15) 0%, transparent 70%);
+      border-radius: 50%;
+      animation: pulse-glow 3s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50%       { opacity: 1; transform: scale(1.05); }
+    }
+
+    .feature-text { padding: 10px 0; }
+    .feature-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+    .chip {
+      background: rgba(91,94,244,0.12);
+      border: 1px solid rgba(91,94,244,0.3);
+      border-radius: 50px;
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #9a9cf8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chip-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }
+
+    /* ─── ALL FEATURES GRID ─────────────────────────────── */
+    #all-features {
+      padding: 100px 6%;
+      background: linear-gradient(180deg, transparent, rgba(91,94,244,0.04) 50%, transparent);
+    }
+    .all-features-header { text-align: center; margin-bottom: 64px; }
+    .all-features-header .section-sub { margin: 0 auto; }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    .fcard {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.3s;
+    }
+    .fcard.visible { opacity: 1; transform: translateY(0); }
+    .fcard:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3), 0 0 0 1px rgba(91,94,244,0.3);
+      border-color: rgba(91,94,244,0.3);
+    }
+    .fcard-icon {
+      width: 48px; height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      margin-bottom: 18px;
+    }
+    .fcard-icon.blue  { background: rgba(91,94,244,0.15); }
+    .fcard-icon.orange { background: rgba(255,112,51,0.15); }
+    .fcard-icon.purple { background: rgba(160,80,255,0.15); }
+    .fcard-icon.green  { background: rgba(50,220,130,0.15); }
+    .fcard-title { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .fcard-desc  { font-size: 0.88rem; color: var(--muted); line-height: 1.65; }
+
+    /* ─── HOW IT WORKS ──────────────────────────────────── */
+    #how {
+      padding: 100px 6%;
+      text-align: center;
+    }
+    .how-header { margin-bottom: 64px; }
+    .steps {
+      display: flex;
+      gap: 0;
+      justify-content: center;
+      flex-wrap: wrap;
+      position: relative;
+    }
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 36px;
+      left: 15%; right: 15%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--blue), var(--orange), var(--blue), transparent);
+      opacity: 0.4;
+    }
+    .step {
+      flex: 1;
+      min-width: 180px;
+      max-width: 240px;
+      padding: 0 20px;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .step.visible { opacity: 1; transform: translateY(0); }
+    .step-num {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), #9a9cf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: 900;
+      margin: 0 auto 20px;
+      box-shadow: 0 0 30px rgba(91,94,244,0.4);
+      position: relative;
+      z-index: 1;
+    }
+    .step-title { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .step-desc  { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+
+    /* ─── PRIVACY ───────────────────────────────────────── */
+    #privacy {
+      padding: 100px 6%;
+      background: linear-gradient(180deg, transparent, rgba(255,112,51,0.04) 50%, transparent);
+    }
+    .privacy-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .privacy-badges {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 48px;
+    }
+    .privacy-badge {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 200px;
+      opacity: 0;
+      transform: scale(0.95);
+      transition: opacity 0.5s ease, transform 0.5s ease, box-shadow 0.3s;
+    }
+    .privacy-badge.visible { opacity: 1; transform: scale(1); }
+    .privacy-badge:hover { box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+    .pb-icon { font-size: 1.8rem; }
+    .pb-text strong { display: block; font-size: 0.95rem; font-weight: 700; }
+    .pb-text span  { font-size: 0.8rem; color: var(--muted); }
+
+    /* ─── CTA ───────────────────────────────────────────── */
+    #cta {
+      padding: 120px 6%;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    #cta::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(91,94,244,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta-title {
+      font-size: clamp(2rem, 5vw, 4rem);
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 24px;
+    }
+    .cta-sub {
+      font-size: 1.1rem;
+      color: var(--muted);
+      margin-bottom: 48px;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .gplay-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      background: #fff;
+      color: #111;
+      text-decoration: none;
+      border-radius: 14px;
+      padding: 14px 28px;
+      font-weight: 700;
+      font-size: 1rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 8px 40px rgba(255,255,255,0.15);
+    }
+    .gplay-btn:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 16px 50px rgba(255,255,255,0.25); }
+    .gplay-btn svg { width: 28px; height: 28px; }
+    .gplay-btn-text { text-align: left; line-height: 1.2; }
+    .gplay-btn-text small { display: block; font-size: 0.72rem; font-weight: 500; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ─── FOOTER ────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 6%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.1rem;
+    }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { color: var(--muted); font-size: 0.85rem; text-decoration: none; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--white); }
+    footer p { color: var(--muted); font-size: 0.82rem; }
+
+    /* ─── SCROLLBAR ─────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: rgba(91,94,244,0.4); border-radius: 3px; }
+
+    /* ─── RESPONSIVE ────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .feature-block { grid-template-columns: 1fr; gap: 40px; }
+      .feature-block.reverse { direction: ltr; }
+      .floating-pill.p1, .floating-pill.p3 { display: none; }
+      .floating-pill.p2 { right: 0; font-size: 0.75rem; }
+      .steps::before { display: none; }
+      .stats-grid { gap: 40px; }
+      footer { flex-direction: column; text-align: center; }
+    }
+
+    /* ─── UTILITY ───────────────────────────────────────── */
+    .text-center { text-align: center; }
+    .gradient-text {
+      background: linear-gradient(135deg, var(--white) 30%, #9a9cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .orange-text { color: var(--orange); }
+
+    /* ─── MARQUEE STRIP ─────────────────────────────────── */
+    .marquee-wrap {
+      overflow: hidden;
+      padding: 16px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: rgba(91,94,244,0.04);
+    }
+    .marquee-track {
+      display: flex;
+      gap: 40px;
+      animation: marquee 28s linear infinite;
+      width: max-content;
+    }
+    .marquee-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .marquee-item span { color: var(--blue); font-size: 1rem; }
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ─── AUDIO VISUALIZER ANIMATION ───────────────────── */
+    .visualizer {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 50px;
+      padding: 0 4px;
+    }
+    .vis-bar {
+      width: 4px;
+      border-radius: 3px;
+      background: linear-gradient(to top, var(--blue), var(--orange));
+      animation: vis-anim var(--d) ease-in-out infinite alternate;
+    }
+    @keyframes vis-anim {
+      from { height: 4px; opacity: 0.5; }
+      to   { height: var(--h); opacity: 1; }
+    }
+
+    /* cta ring animation */
+    .cta-rings {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(91,94,244,0.2);
+      animation: ring-expand 4s ease-out infinite;
+    }
+    .ring:nth-child(2) { animation-delay: 1.3s; }
+    .ring:nth-child(3) { animation-delay: 2.6s; }
+    @keyframes ring-expand {
+      0%   { width: 100px; height: 100px; opacity: 0.6; }
+      100% { width: 600px; height: 600px; opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Starfield canvas -->
+<canvas id="star-canvas"></canvas>
+
+<!-- ─── NAV ─────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-logo">
+    <img src="assets/appicon-32.png" width="32" height="32" alt="WebVox logo" />
+    WebVox
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="#privacy">Privacy</a>
+  </div>
+  <a href="https://play.google.com/store/apps/details?id=app.alkyo.webreader" target="_blank" class="nav-cta">Get the App</a>
+</nav>
+
+<!-- ─── HERO ─────────────────────────────────────────────── -->
+<section id="hero">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="hero-badge">
+    <span class="hero-badge-dot"></span>
+    Free · Open Source · No Account Needed
+  </div>
+
+  <h1 class="hero-title">
+    Listen to the<br/>
+    <span class="accent">whole web,</span><br/>
+    <span class="blue-accent">distraction-free.</span>
+  </h1>
+
+  <p class="hero-sub">
+    WebVox transforms cluttered websites into beautiful reader mode pages
+    and reads them aloud using Android's built-in text-to-speech engine.
+    Paste a URL or share directly from your browser to instantly start listening.
+  </p>
+
+  <div class="hero-actions">
+    <a href="https://play.google.com/store/apps/details?id=app.alkyo.webreader" target="_blank" class="btn-primary">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2L14 8H6L10 2Z" fill="white" opacity="0.8"/><rect x="5" y="9" width="10" height="2" rx="1" fill="white"/><path d="M5 13l3 4h4l3-4H5Z" fill="white" opacity="0.6"/></svg>
+      Download on Google Play
+    </a>
+    <a href="#features" class="btn-secondary">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 6v4l2.5 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      See Features
+    </a>
+  </div>
+
+  <!-- Wave animation before hero image -->
+  <div class="wave-bar-row" id="hero-wave"></div>
+
+  <div class="hero-image-wrap">
+    <img src="/assets/preview/hero.png" alt="WebVox app screenshot" class="hero-main" />
+
+    <div class="floating-pill p1">
+      <span class="pill-icon">🎧</span>
+      <div>
+        <strong style="display:block;font-size:0.85rem;">Now Reading</strong>
+        <span style="color:var(--muted);font-size:0.75rem;">Martial Peak · Chapter 4257</span>
+      </div>
+      <div class="visualizer" style="height:28px" id="mini-vis"></div>
+    </div>
+
+    <div class="floating-pill p2">
+      <span class="pill-icon">⚡</span>
+      <div>
+        <strong>Reader Mode Active</strong>
+        <span style="color:var(--orange);font-size:0.75rem;display:block;">Ads removed · Clean view</span>
+      </div>
+    </div>
+
+    <div class="floating-pill p3">
+      <span class="pill-icon">🔖</span>
+      <div>
+        <strong>Saved to Bookmarks</strong>
+        <span style="color:var(--muted);font-size:0.75rem;display:block;">Resume anytime</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── MARQUEE STRIP ──────────────────────────────────────── -->
+<div class="marquee-wrap">
+  <div class="marquee-track" id="marquee-track"></div>
+</div>
+
+<!-- ─── STATS ─────────────────────────────────────────────── -->
+<section id="stats">
+  <div class="stats-grid">
+    <div class="stat-item">
+      <div class="stat-num" data-target="100">0</div>
+      <div class="stat-label">% Free &amp; Open Source</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num" data-target="0">0</div>
+      <div class="stat-label">Ads or Trackers</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num" data-target="5">0</div>
+      <div class="stat-label">Feature Categories</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num" data-target="1">0</div>
+      <div class="stat-label">Click to Start Listening</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FEATURE SECTIONS ──────────────────────────────────── -->
+<section id="features">
+
+  <!-- Feature 1 -->
+  <div class="feature-block">
+    <div class="feature-phone">
+      <img src="/assets/preview/Layer 1.png" alt="Share a URL to WebVox" loading="lazy"/>
+    </div>
+    <div class="feature-text">
+      <span class="section-label">Step 1</span>
+      <h2 class="section-title">Paste a URL.<br/><span class="orange-text">Done.</span></h2>
+      <p class="section-sub">
+        Share any article, blog post, or webpage directly from your browser.
+        WebVox strips away the noise and gives you the pure content immediately.
+      </p>
+      <div class="feature-chips">
+        <div class="chip"><span class="chip-dot"></span>One-tap share from any browser</div>
+        <div class="chip"><span class="chip-dot"></span>Direct URL paste support</div>
+        <div class="chip"><span class="chip-dot"></span>Auto content extraction</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature 2 -->
+  <div class="feature-block reverse">
+    <div class="feature-phone">
+      <img src="/assets/preview/Layer 2.png" alt="Clean reader mode" loading="lazy"/>
+    </div>
+    <div class="feature-text">
+      <span class="section-label">Reader Mode</span>
+      <h2 class="section-title">Clean,<br/><span class="orange-text">distraction-free</span><br/>reading.</h2>
+      <p class="section-sub">
+        Removes ads, popups, sidebars, and visual clutter automatically.
+        Optimized typography makes every article a pleasure to read or listen to.
+      </p>
+      <div class="feature-chips">
+        <div class="chip"><span class="chip-dot"></span>Ad &amp; popup removal</div>
+        <div class="chip"><span class="chip-dot"></span>Auto article extraction</div>
+        <div class="chip"><span class="chip-dot"></span>Comfortable typography</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature 3 -->
+  <div class="feature-block">
+    <div class="feature-phone">
+      <img src="/assets/preview/Layer 3.png" alt="Text-to-speech playback" loading="lazy"/>
+    </div>
+    <div class="feature-text">
+      <span class="section-label">Text-to-Speech</span>
+      <h2 class="section-title">Listen with<br/><span class="orange-text">word-by-word</span><br/>highlighting.</h2>
+      <p class="section-sub">
+        Powered by Android's built-in TTS engine. Follow along word-by-word
+        with real-time highlighting. Adjust speed, pitch, voice, and language to your preference.
+      </p>
+      <div class="feature-chips">
+        <div class="chip"><span class="chip-dot"></span>Word-by-word highlight</div>
+        <div class="chip"><span class="chip-dot"></span>Adjustable speed &amp; pitch</div>
+        <div class="chip"><span class="chip-dot"></span>Multiple voices &amp; languages</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature 4 -->
+  <div class="feature-block reverse">
+    <div class="feature-phone">
+      <img src="/assets/preview/Layer 4.png" alt="Beautiful themes" loading="lazy"/>
+    </div>
+    <div class="feature-text">
+      <span class="section-label">Background Playback</span>
+      <h2 class="section-title">Keep listening.<br/><span class="orange-text">Screen off.</span></h2>
+      <p class="section-sub">
+        Continue listening with your screen off. Lock-screen and notification controls
+        keep you in command. Full Bluetooth and headset media button support.
+      </p>
+      <div class="feature-chips">
+        <div class="chip"><span class="chip-dot"></span>Background audio</div>
+        <div class="chip"><span class="chip-dot"></span>Lock-screen controls</div>
+        <div class="chip"><span class="chip-dot"></span>Bluetooth &amp; headset support</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature 5 -->
+  <div class="feature-block">
+    <div class="feature-phone">
+      <img src="/assets/preview/Layer 5.png" alt="Save articles" loading="lazy"/>
+    </div>
+    <div class="feature-text">
+      <span class="section-label">Save &amp; Continue</span>
+      <h2 class="section-title">Bookmark &amp;<br/><span class="orange-text">resume</span><br/>later.</h2>
+      <p class="section-sub">
+        Bookmark articles for later and pick up exactly where you left off.
+        Full reading history with resume support so you never lose your place.
+      </p>
+      <div class="feature-chips">
+        <div class="chip"><span class="chip-dot"></span>Bookmark articles</div>
+        <div class="chip"><span class="chip-dot"></span>Reading history</div>
+        <div class="chip"><span class="chip-dot"></span>Resume from last position</div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ─── ALL FEATURES GRID ─────────────────────────────────── -->
+<section id="all-features">
+  <div class="all-features-header">
+    <span class="section-label">Everything you need</span>
+    <h2 class="section-title gradient-text">Packed with powerful features</h2>
+    <p class="section-sub">Every feature designed for a calmer, smarter reading experience.</p>
+  </div>
+
+  <div class="features-grid" id="features-grid">
+    <div class="fcard">
+      <div class="fcard-icon blue">🔇</div>
+      <div class="fcard-title">Clean Reader Mode</div>
+      <div class="fcard-desc">Strips ads, popups, and sidebars. Pure article content every time.</div>
+    </div>
+    <div class="fcard">
+      <div class="fcard-icon orange">🔊</div>
+      <div class="fcard-title">Text-to-Speech</div>
+      <div class="fcard-desc">Android system TTS with word-by-word highlighting and full control.</div>
+    </div>
+    <div class="fcard">
+      <div class="fcard-icon purple">🎧</div>
+      <div class="fcard-title">Background Playback</div>
+      <div class="fcard-desc">Listen with screen off, notification controls, and Bluetooth support.</div>
+    </div>
+    <div class="fcard">
+      <div class="fcard-icon green">📖</div>
+      <div class="fcard-title">Smart Navigation</div>
+      <div class="fcard-desc">Previous &amp; next articles, auto-play, and auto-next for seamless sessions.</div>
+    </div>
+    <div class="fcard">
+      <div class="fcard-icon blue">🔖</div>
+      <div class="fcard-title">Bookmarks &amp; History</div>
+      <div class="fcard-desc">Save articles, track reading progress, and revisit past pages instantly.</div>
+    </div>
+    <div class="fcard">
+      <div class="fcard-icon orange">📤</div>
+      <div class="fcard-title">Share Integration</div>
+      <div class="fcard-desc">Share into WebVox from any browser. Share articles back out to other apps.</div>
+    </div>
+    <div class="fcard">
+      <div class="fcard-icon purple">⚙️</div>
+      <div class="fcard-title">Voice Customization</div>
+      <div class="fcard-desc">Adjust speed, pitch, voice, and language to exactly how you like it.</div>
+    </div>
+    <div class="fcard">
+      <div class="fcard-icon green">⚡</div>
+      <div class="fcard-title">Article Caching</div>
+      <div class="fcard-desc">Background caching so your next article loads faster before you need it.</div>
+    </div>
+    <div class="fcard">
+      <div class="fcard-icon blue">🌙</div>
+      <div class="fcard-title">Light &amp; Dark Themes</div>
+      <div class="fcard-desc">Comfortable reading day or night with beautifully designed themes.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── HOW IT WORKS ──────────────────────────────────────── -->
+<section id="how">
+  <div class="how-header">
+    <span class="section-label">Simple by design</span>
+    <h2 class="section-title gradient-text">How it works</h2>
+  </div>
+  <div class="steps">
+    <div class="step" style="--delay:0s">
+      <div class="step-num">1</div>
+      <div class="step-title">Share or Paste</div>
+      <div class="step-desc">Share a URL from your browser or paste it directly into WebVox.</div>
+    </div>
+    <div class="step" style="--delay:0.15s">
+      <div class="step-num">2</div>
+      <div class="step-title">Reader Mode</div>
+      <div class="step-desc">WebVox strips clutter and presents a clean, readable version of the page.</div>
+    </div>
+    <div class="step" style="--delay:0.3s">
+      <div class="step-num">3</div>
+      <div class="step-title">Press Play</div>
+      <div class="step-desc">Tap play and listen. Follow along with word-by-word highlighting.</div>
+    </div>
+    <div class="step" style="--delay:0.45s">
+      <div class="step-num">4</div>
+      <div class="step-title">Keep Going</div>
+      <div class="step-desc">Screen off, earbuds in. WebVox keeps playing in the background.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── PRIVACY ───────────────────────────────────────────── -->
+<section id="privacy">
+  <div class="privacy-inner">
+    <span class="section-label">Privacy First</span>
+    <h2 class="section-title gradient-text">Your reading is yours.</h2>
+    <p class="section-sub" style="margin:0 auto;max-width:520px;line-height:1.7;color:var(--muted)">
+      WebVox is built for people who value privacy. No account, no subscriptions,
+      no unnecessary tracking. Just a clean reading experience.
+    </p>
+    <div class="privacy-badges">
+      <div class="privacy-badge">
+        <span class="pb-icon">🔒</span>
+        <div class="pb-text">
+          <strong>No Account Required</strong>
+          <span>Works offline, completely local</span>
+        </div>
+      </div>
+      <div class="privacy-badge">
+        <span class="pb-icon">🚫</span>
+        <div class="pb-text">
+          <strong>No Subscriptions</strong>
+          <span>Free forever, always</span>
+        </div>
+      </div>
+      <div class="privacy-badge">
+        <span class="pb-icon">👁️</span>
+        <div class="pb-text">
+          <strong>No Tracking</strong>
+          <span>Zero unnecessary data collection</span>
+        </div>
+      </div>
+      <div class="privacy-badge">
+        <span class="pb-icon">🛠️</span>
+        <div class="pb-text">
+          <strong>Open Source</strong>
+          <span>Transparent, auditable code</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── CTA ───────────────────────────────────────────────── -->
+<section id="cta">
+  <div class="cta-rings">
+    <div class="ring"></div>
+    <div class="ring"></div>
+    <div class="ring"></div>
+  </div>
+  <div style="position:relative;z-index:1">
+    <span class="section-label">Get Started Free</span>
+    <h2 class="cta-title">
+      Read the web.<br/>
+      <span class="orange-text">Calmer. Cleaner.</span><br/>
+      <span class="gradient-text">Louder.</span>
+    </h2>
+    <p class="cta-sub">
+      WebVox is designed to make reading on the web calmer, cleaner, and easier to listen to.
+      Download free on Android today.
+    </p>
+    <a href="https://play.google.com/store/apps/details?id=app.alkyo.webreader" target="_blank" class="gplay-btn">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00C6FF"/>
+            <stop offset="100%" stop-color="#0072FF"/>
+          </linearGradient>
+          <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00D2FF"/>
+            <stop offset="100%" stop-color="#3A7BD5"/>
+          </linearGradient>
+        </defs>
+        <path d="M3 20.5v-17c0-.83 1-.83 1.5-.5L20 11.5c.5.28.5 1 0 1.28L4.5 21c-.5.33-1.5.33-1.5-.5z" fill="url(#g1)"/>
+        <path d="M3 3.5L14.5 15 3 20.5V3.5z" fill="url(#g2)" opacity="0.8"/>
+        <path d="M14.5 15L20 12.78 16.5 11 14.5 15z" fill="#FFD600"/>
+        <path d="M3 3.5l11.5 11.5L16.5 11 4.5 3C4 2.67 3 2.67 3 3.5z" fill="#FF3D00" opacity="0.8"/>
+      </svg>
+      <div class="gplay-btn-text">
+        <small>Get it on</small>
+        Google Play
+      </div>
+    </a>
+  </div>
+</section>
+
+<!-- ─── FOOTER ────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-logo">
+    <img src="assets/appicon-32.png" width="28" height="28" alt="WebVox logo" />
+    WebVox
+  </div>
+  <div class="footer-links">
+    <a href="https://alkyo.app/privacy">Privacy Policy</a>
+    <a href="https://github.com/aminusia/WebVox" target="_blank">GitHub</a>
+    <a href="mailto:support@alkyo.app">Contact</a>
+  </div>
+  <p>© 2026 WebVox. Open-source &amp; free forever.</p>
+</footer>
+
+<!-- ─── SCRIPTS ───────────────────────────────────────────── -->
+<script>
+// ── Starfield canvas ──────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('star-canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H, stars = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function init() {
+    stars = [];
+    for (let i = 0; i < 160; i++) {
+      stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.4 + 0.2,
+        a: Math.random(),
+        speed: Math.random() * 0.3 + 0.05,
+        dir: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  let mouseX = W / 2, mouseY = H / 2;
+  document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const t = Date.now() * 0.001;
+    stars.forEach(s => {
+      s.x += Math.cos(s.dir) * s.speed;
+      s.y += Math.sin(s.dir) * s.speed;
+      if (s.x < 0) s.x = W;
+      if (s.x > W) s.x = 0;
+      if (s.y < 0) s.y = H;
+      if (s.y > H) s.y = 0;
+
+      const twinkle = 0.4 + 0.6 * Math.abs(Math.sin(t * s.speed * 3 + s.dir));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(200,200,255,${s.a * twinkle})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  init();
+  draw();
+  window.addEventListener('resize', () => { resize(); init(); });
+})();
+
+// ── Hero waveform ─────────────────────────────────────────
+(function() {
+  const wave = document.getElementById('hero-wave');
+  const heights = [8,14,22,30,38,30,22,38,14,28,36,20,12,32,24,16,34,18,26,10,32,20,28,16,24,36,12,28,20,14];
+  heights.forEach((h, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'wave-bar';
+    bar.style.setProperty('--h', h + 'px');
+    bar.style.setProperty('--dur', (0.8 + Math.random() * 1) + 's');
+    bar.style.animationDelay = (i * 0.06) + 's';
+    wave.appendChild(bar);
+  });
+})();
+
+// ── Mini visualizer in floating pill ─────────────────────
+(function() {
+  const vis = document.getElementById('mini-vis');
+  for (let i = 0; i < 6; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'vis-bar';
+    bar.style.setProperty('--h', (8 + Math.random() * 18) + 'px');
+    bar.style.setProperty('--d', (0.4 + Math.random() * 0.6) + 's');
+    bar.style.animationDelay = (i * 0.1) + 's';
+    vis.appendChild(bar);
+  }
+})();
+
+// ── Marquee content ───────────────────────────────────────
+(function() {
+  const items = [
+    '🎧 Background Playback',
+    '✨ Clean Reader Mode',
+    '🔊 Text-to-Speech',
+    '🔖 Bookmark Articles',
+    '⚡ Ad Removal',
+    '🌙 Dark Mode',
+    '📤 Share Integration',
+    '🔒 Privacy Friendly',
+    '🌐 Any Website',
+    '⚙️ Word Highlighting',
+  ];
+  const track = document.getElementById('marquee-track');
+  // duplicate for seamless loop
+  [...items, ...items].forEach(text => {
+    const el = document.createElement('div');
+    el.className = 'marquee-item';
+    el.innerHTML = `<span>◆</span>${text}`;
+    track.appendChild(el);
+  });
+})();
+
+// ── Intersection observer animations ─────────────────────
+(function() {
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((entry, idx) => {
+      if (entry.isIntersecting) {
+        const el = entry.target;
+        const delay = el.style.getPropertyValue('--delay') || '0s';
+        setTimeout(() => el.classList.add('visible'), parseFloat(delay) * 1000);
+        io.unobserve(el);
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.feature-block, .fcard, .step, .privacy-badge').forEach(el => io.observe(el));
+
+  // Stagger cards
+  document.querySelectorAll('.fcard').forEach((el, i) => {
+    el.style.transitionDelay = (i * 0.07) + 's';
+  });
+  document.querySelectorAll('.step').forEach((el, i) => {
+    el.style.transitionDelay = (i * 0.12) + 's';
+  });
+  document.querySelectorAll('.privacy-badge').forEach((el, i) => {
+    el.style.transitionDelay = (i * 0.1) + 's';
+  });
+})();
+
+// ── Stat counter animation ────────────────────────────────
+(function() {
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const el   = entry.target;
+      const end  = parseInt(el.dataset.target, 10);
+      const dur  = 1200;
+      const step = 16;
+      let cur = 0;
+      const suffix = el.dataset.suffix || '';
+      const timer = setInterval(() => {
+        cur = Math.min(cur + Math.ceil(end / (dur / step)), end);
+        el.textContent = cur + suffix;
+        if (cur >= end) clearInterval(timer);
+      }, step);
+      io.unobserve(el);
+    });
+  }, { threshold: 0.5 });
+
+  document.querySelectorAll('.stat-num[data-target]').forEach(el => io.observe(el));
+})();
+
+// ── Parallax hero on scroll ───────────────────────────────
+(function() {
+  const heroImg = document.querySelector('.hero-main');
+  if (!heroImg) return;
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    heroImg.style.transform = `translateY(${y * 0.12}px)`;
+  }, { passive: true });
+})();
+
+// ── Nav scroll effect ─────────────────────────────────────
+(function() {
+  const nav = document.querySelector('nav');
+  window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 40
+      ? 'rgba(8,8,32,0.92)'
+      : 'rgba(8,8,32,0.6)';
+  }, { passive: true });
+})();
+</script>
+</body>
+</html>
