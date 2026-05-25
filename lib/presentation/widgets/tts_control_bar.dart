@@ -6,14 +6,26 @@ import 'package:webvox/presentation/providers/providers.dart';
 import 'package:webvox/presentation/providers/tts_notifier.dart';
 
 /// Returns a human-readable label from a raw TTS voice name.
-/// E.g. "en-us-x-sfg#female_1-local" → "female_1"
+/// Handles Google TTS voice patterns like:
+///   "en-us-x-sfg#female_1-local"  → "female 1 ✦" (Google, local)
+///   "en-us-x-sfg#male_2-remote"   → "male 2 ☁" (Google, remote/network)
+///   Plain names are returned as-is (trimmed).
 String _voiceDisplayName(String name) {
   if (name.isEmpty) return 'Default';
-  var display = name;
-  final hash = display.indexOf('#');
-  if (hash >= 0) display = display.substring(hash + 1);
-  display = display.replaceAll(RegExp(r'-(local|remote)$'), '');
-  return display.isNotEmpty ? display : name;
+
+  // Google TTS pattern: contains '#'
+  if (name.contains('#')) {
+    final hashIdx = name.indexOf('#');
+    final variant = name.substring(hashIdx + 1);
+    final isRemote = variant.endsWith('-remote');
+    final label = variant
+        .replaceAll(RegExp(r'-(local|remote)$'), '')
+        .replaceAll('_', ' ');
+    final suffix = isRemote ? ' ☁' : '';
+    return '${label.isNotEmpty ? label : name}$suffix';
+  }
+
+  return name;
 }
 
 class TtsControlBar extends ConsumerWidget {

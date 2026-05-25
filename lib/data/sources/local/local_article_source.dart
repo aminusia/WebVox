@@ -272,7 +272,10 @@ class LocalArticleSource {
 
   // ─── Grouped queries ────────────────────────────────────────────────────
 
-  /// Recent articles grouped by title, ordered by most-recently-read first.
+  /// Recent: all titles that have at least one article, ordered by most-recently
+  /// read article first. Titles with no read history appear at the end (sorted
+  /// by title creation date). Each title includes ALL its articles, with
+  /// read articles first (most recent), then unread ones.
   Future<List<TitleGroup>> getRecentGrouped() async {
     final db = await _db;
     final titleRows = await db.rawQuery('''
@@ -281,9 +284,9 @@ class LocalArticleSource {
       FROM titles t
       JOIN websites w ON w.id = t.website_id
       JOIN articles a ON a.title_id = t.id
-      JOIN read_history rh ON rh.article_id = a.id
+      LEFT JOIN read_history rh ON rh.article_id = a.id
       GROUP BY t.id, t.name, w.domain
-      ORDER BY last_read_at DESC
+      ORDER BY last_read_at DESC, t.created_at DESC
     ''');
 
     final groups = <TitleGroup>[];
@@ -292,11 +295,11 @@ class LocalArticleSource {
       final articleRows = await db.rawQuery(
         '''
         SELECT $_cols
-        FROM read_history rh
-        JOIN articles a ON a.id = rh.article_id
+        FROM articles a
+        LEFT JOIN read_history rh ON rh.article_id = a.id
         LEFT JOIN bookmarks b ON b.article_id = a.id
         WHERE a.title_id = ?
-        ORDER BY rh.read_at DESC
+        ORDER BY rh.read_at DESC, a.created_at DESC
       ''',
         [titleId],
       );

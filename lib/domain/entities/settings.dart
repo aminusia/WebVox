@@ -15,6 +15,10 @@ class Settings {
   /// Empty string means use the system default voice.
   final String ttsVoice;
 
+  /// TTS engine package name. Empty string = system default.
+  /// E.g. 'com.google.android.tts' for Google TTS.
+  final String ttsEngine;
+
   // ── Paragraph highlight style ─────────────────────────────────────────────
   /// ARGB int for paragraph text color when highlighted. Default: 0xFF2196F3 (blue).
   final int paragraphHighlightColor;
@@ -50,6 +54,7 @@ class Settings {
     this.autoRead = true,
     this.themePreference = ThemePreference.system,
     this.ttsVoice = '',
+    this.ttsEngine = '',
     this.paragraphHighlightColor = 0xFF2196F3,
     this.paragraphHighlightBackground,
     this.paragraphHighlightDecoration = HighlightDecoration.none,
@@ -68,6 +73,7 @@ class Settings {
     bool? autoRead,
     ThemePreference? themePreference,
     String? ttsVoice,
+    String? ttsEngine,
     int? paragraphHighlightColor,
     Object? paragraphHighlightBackground = _sentinel,
     HighlightDecoration? paragraphHighlightDecoration,
@@ -84,6 +90,7 @@ class Settings {
     autoRead: autoRead ?? this.autoRead,
     themePreference: themePreference ?? this.themePreference,
     ttsVoice: ttsVoice ?? this.ttsVoice,
+    ttsEngine: ttsEngine ?? this.ttsEngine,
     paragraphHighlightColor:
         paragraphHighlightColor ?? this.paragraphHighlightColor,
     paragraphHighlightBackground:

@@ -298,7 +298,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 ),
                 if (controller.text.isNotEmpty)
                   IconButton(
-                    icon: const Icon(Icons.copy),
+                    icon: const Icon(Icons.copy, color: AppColors.onBar),
                     tooltip: 'Copy URL',
                     onPressed: () {
                       Clipboard.setData(
@@ -311,7 +311,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                   ),
                 if (controller.text.isNotEmpty)
                   IconButton(
-                    icon: const Icon(Icons.share),
+                    icon: const Icon(Icons.share, color: AppColors.onBar),
                     tooltip: 'Share URL',
                     onPressed: () {
                       Share.share(controller.text.trim());
@@ -535,11 +535,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(
-                  Icons.edit_outlined,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                Icon(Icons.edit_outlined, size: 20, color: AppColors.onBar),
+                const SizedBox(width: 8),
               ],
             ),
           ),
@@ -805,7 +802,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   }
 }
 
-// ── "Play here" overlay ───────────────────────────────────────────────────────
+// ── "Read here" overlay ───────────────────────────────────────────────────────
 
 class _PlayHereOverlay extends StatefulWidget {
   final Offset anchorOffset;
@@ -894,7 +891,7 @@ class _PlayHereOverlayState extends State<_PlayHereOverlay>
             child: const ColoredBox(color: Colors.transparent),
           ),
         ),
-        // Animated "Play here" button, anchored above the paragraph.
+        // Animated "Read here" button, anchored above the paragraph.
         Positioned(
           left: widget.anchorOffset.dx,
           top: top,
@@ -916,7 +913,7 @@ class _PlayHereOverlayState extends State<_PlayHereOverlay>
                 child: ElevatedButton.icon(
                   onPressed: _handlePlay,
                   icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Play here'),
+                  label: const Text('Read here'),
                   style: ElevatedButton.styleFrom(
                     elevation: 8,
                     shadowColor: Colors.black45,

@@ -32,6 +32,9 @@ class LocalSettingsSource {
         orElse: () => ThemePreference.system,
       ),
       ttsVoice: prefs.getString(AppConstants.prefTtsVoice) ?? '',
+      ttsEngine:
+          prefs.getString(AppConstants.prefTtsEngine) ??
+          AppConstants.defaultTtsEngine,
       paragraphHighlightColor:
           prefs.getInt(AppConstants.prefParagraphHighlightColor) ??
           AppConstants.defaultParagraphHighlightColor,
@@ -81,6 +84,7 @@ class LocalSettingsSource {
       settings.themePreference.name,
     );
     await prefs.setString(AppConstants.prefTtsVoice, settings.ttsVoice);
+    await prefs.setString(AppConstants.prefTtsEngine, settings.ttsEngine);
     await prefs.setInt(
       AppConstants.prefParagraphHighlightColor,
       settings.paragraphHighlightColor,

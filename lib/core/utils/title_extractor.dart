@@ -3,7 +3,7 @@
 class TitleExtractor {
   // Matches " - Chapter 3", ": Part II", ", Vol. 5", " Ch.12", etc.
   static final _chapterPattern = RegExp(
-    r'\s*[-:,–—]?\s*\b(chapter|part|episode|section|volume|ch\.?|ep\.?|vol\.?)\s*[\dIVXivx]+.*$',
+    r'^(?: - | # |: )$|\s*[-:,–—]?\s*\b(chapter|part|episode|section|volume|ch\.?|ep\.?|vol\.?)\s*#?\s*[\dIVXivx]+.*$',
     caseSensitive: false,
   );
 

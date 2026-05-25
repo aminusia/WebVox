@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:webvox/core/constants/app_constants.dart';
+import 'package:webvox/core/services/platform_service.dart';
 import 'package:webvox/core/utils/language_detector.dart';
 import 'package:webvox/domain/entities/settings.dart';
 import 'package:webvox/presentation/providers/providers.dart';
@@ -69,6 +71,11 @@ class _SettingsForm extends ConsumerWidget {
         sectionCard([
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: _TtsEngineSelector(settings: settings),
+          ),
+          Divider(height: 1, color: Colors.white.withAlpha(15)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: DropdownButtonFormField<String>(
               initialValue: settings.ttsLanguage,
               decoration: const InputDecoration(labelText: 'TTS Language'),
@@ -120,6 +127,16 @@ class _SettingsForm extends ConsumerWidget {
               'Speed changes take effect immediately, restarting the current paragraph.',
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
+          ),
+          Divider(height: 1, color: Colors.white.withAlpha(15)),
+          _VoiceTestTile(),
+          Divider(height: 1, color: Colors.white.withAlpha(15)),
+          ListTile(
+            leading: const Icon(Icons.open_in_new_rounded),
+            title: const Text('Android TTS settings'),
+            subtitle: const Text('Add voices, change the default engine'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => PlatformService.openTtsSettings(),
           ),
         ]),
         const SizedBox(height: 20),
@@ -400,6 +417,100 @@ class _ClearCacheButtonState extends ConsumerState<_ClearCacheButton> {
   }
 }
 
+class _TtsEngineSelector extends ConsumerWidget {
+  final Settings settings;
+
+  const _TtsEngineSelector({required this.settings});
+
+  String _engineLabel(String name) {
+    if (name == AppConstants.googleTtsEngine) return 'Google Text-to-Speech';
+    if (name.isEmpty) return 'System default';
+    // Use the last segment of the package name as a readable label
+    return name.split('.').last;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enginesAsync = ref.watch(enginesProvider);
+    final notifier = ref.read(settingsProvider.notifier);
+
+    return enginesAsync.when(
+      loading:
+          () => const InputDecorator(
+            decoration: InputDecoration(labelText: 'TTS Engine'),
+            child: SizedBox(height: 20, child: LinearProgressIndicator()),
+          ),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (engines) {
+        // Only show selector if there are multiple engines.
+        if (engines.length <= 1) return const SizedBox.shrink();
+
+        final currentEngine = settings.ttsEngine;
+        final validEngine =
+            engines.any((e) => e['name'] == currentEngine) ? currentEngine : '';
+
+        return DropdownButtonFormField<String>(
+          value: validEngine,
+          decoration: const InputDecoration(labelText: 'TTS Engine'),
+          items: [
+            const DropdownMenuItem(value: '', child: Text('System default')),
+            ...engines.map(
+              (e) => DropdownMenuItem(
+                value: e['name'],
+                child: Text(_engineLabel(e['name'] ?? '')),
+              ),
+            ),
+          ],
+          onChanged: (val) {
+            if (val == null) return;
+            // Clear voice when engine changes
+            notifier.update(settings.copyWith(ttsEngine: val, ttsVoice: ''));
+            ref.read(ttsProvider.notifier).setEngine(val);
+          },
+        );
+      },
+    );
+  }
+}
+
+class _VoiceTestTile extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_VoiceTestTile> createState() => _VoiceTestTileState();
+}
+
+class _VoiceTestTileState extends ConsumerState<_VoiceTestTile> {
+  bool _busy = false;
+
+  Future<void> _runTest() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(ttsProvider.notifier).speakTest();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading:
+          _busy
+              ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+              : const Icon(Icons.volume_up_rounded),
+      title: const Text('Test voice'),
+      subtitle: const Text('"This is a voice test."'),
+      trailing: FilledButton.tonal(
+        onPressed: _busy ? null : _runTest,
+        child: const Text('Play'),
+      ),
+    );
+  }
+}
+
 class _VoiceSelector extends ConsumerWidget {
   final Settings settings;
 
@@ -426,11 +537,15 @@ class _VoiceSelector extends ConsumerWidget {
 
         String displayName(String name) {
           if (name.isEmpty) return 'Default (system)';
-          var d = name;
-          final h = d.indexOf('#');
-          if (h >= 0) d = d.substring(h + 1);
-          d = d.replaceAll(RegExp(r'-(local|remote)$'), '');
-          return d.isNotEmpty ? d : name;
+          if (name.contains('#')) {
+            final variant = name.substring(name.indexOf('#') + 1);
+            final isRemote = variant.endsWith('-remote');
+            final label = variant
+                .replaceAll(RegExp(r'-(local|remote)$'), '')
+                .replaceAll('_', ' ');
+            return isRemote ? '$label ☁' : label;
+          }
+          return name;
         }
 
         final currentVoice = settings.ttsVoice;

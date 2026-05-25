@@ -311,7 +311,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         actions: [
           _ThemeToggleButton(),
           IconButton(
-            icon: const Icon(Icons.settings_outlined),
+            icon: const Icon(Icons.settings_outlined, color: AppColors.onBar),
             tooltip: 'Settings',
             onPressed:
                 () => Navigator.of(context).push(
@@ -427,6 +427,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               (a) => ref
                                   .read(bookmarksGroupedProvider.notifier)
                                   .removeArticle(a.id),
+                          showAllArticles: true,
                         );
                   },
                 ),
@@ -554,6 +555,9 @@ class _GroupedList extends StatelessWidget {
   final void Function(TitleGroup) onDeleteTitle;
   final void Function(Article)? onDeleteArticle;
 
+  /// When true every article in each title is shown without a "Show more" cap.
+  final bool showAllArticles;
+
   const _GroupedList({
     required this.groups,
     required this.expandedTitleId,
@@ -562,6 +566,7 @@ class _GroupedList extends StatelessWidget {
     required this.onRenameTitle,
     required this.onDeleteTitle,
     this.onDeleteArticle,
+    this.showAllArticles = false,
   });
 
   @override
@@ -578,6 +583,7 @@ class _GroupedList extends StatelessWidget {
           onRename: () => onRenameTitle(group),
           onDelete: () => onDeleteTitle(group),
           onDeleteArticle: onDeleteArticle,
+          showAllByDefault: showAllArticles,
         );
       },
     );
@@ -593,6 +599,9 @@ class _TitleAccordion extends StatefulWidget {
   final VoidCallback onDelete;
   final void Function(Article)? onDeleteArticle;
 
+  /// When true, all articles are shown without a count cap.
+  final bool showAllByDefault;
+
   const _TitleAccordion({
     required this.group,
     required this.isExpanded,
@@ -601,6 +610,7 @@ class _TitleAccordion extends StatefulWidget {
     required this.onRename,
     required this.onDelete,
     this.onDeleteArticle,
+    this.showAllByDefault = false,
   });
 
   @override
@@ -625,9 +635,9 @@ class _TitleAccordionState extends State<_TitleAccordion> {
     final theme = Theme.of(context);
     final dimColor = theme.textTheme.bodySmall?.color?.withAlpha(153);
     final articles = widget.group.articles;
-    final hasMore = articles.length > _initialLimit;
+    final hasMore = !widget.showAllByDefault && articles.length > _initialLimit;
     final visibleArticles =
-        (_showAll || !hasMore)
+        (_showAll || widget.showAllByDefault || !hasMore)
             ? articles
             : articles.take(_initialLimit).toList();
 

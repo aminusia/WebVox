@@ -97,6 +97,7 @@ class TtsAudioHandler extends BaseAudioHandler {
   String _language = 'en-US';
   String _voiceName = '';
   String _voiceLocale = '';
+  String _engineName = '';
 
   final _stateCtrl = StreamController<TtsState>.broadcast();
   TtsState _ttsState = const TtsState.initial();
@@ -215,6 +216,53 @@ class TtsAudioHandler extends BaseAudioHandler {
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
+
+  /// Returns available TTS engines on the device (Android only).
+  Future<List<Map<String, String>>> getEngines() async {
+    try {
+      final raw = await _tts.getEngines;
+      if (raw == null) return [];
+      final result = <Map<String, String>>[];
+      for (final e in raw as List) {
+        final name = e.toString();
+        if (name.isNotEmpty) result.add({'name': name});
+      }
+      return result;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> setEngine(String engineName) async {
+    _engineName = engineName;
+    if (engineName.isNotEmpty) {
+      await _tts.setEngine(engineName);
+      // Re-apply language after engine switch
+      await _tts.setLanguage(_language);
+      await _tts.setSpeechRate(_speed);
+    }
+    _emit(_ttsState);
+    if (_ttsState.isPlaying) {
+      await _tts.stop();
+      _startOffset = 0;
+      await _speakCurrent();
+    }
+  }
+
+  /// Speaks a short test phrase using the current engine/voice/language.
+  Future<void> speakTest() async {
+    await _tts.stop();
+    if (_engineName.isNotEmpty) {
+      await _tts.setEngine(_engineName);
+    }
+    if (_voiceName.isNotEmpty) {
+      await _tts.setVoice({
+        'name': _voiceName,
+        'locale': _voiceLocale.isNotEmpty ? _voiceLocale : _language,
+      });
+    }
+    await _tts.speak('This is a voice test.');
+  }
 
   /// Returns voices available on the device filtered to [locale]'s language.
   Future<List<Map<String, String>>> getVoicesForLocale(String locale) async {
@@ -501,6 +549,9 @@ class TtsNotifier extends StateNotifier<TtsState> {
     if (!mounted) return;
     try {
       final settings = await _settingsRepo.getSettings();
+      if (mounted && settings.ttsEngine.isNotEmpty) {
+        await _handler.setEngine(settings.ttsEngine);
+      }
       if (mounted && settings.ttsVoice.isNotEmpty) {
         await _handler.setVoice(settings.ttsVoice, settings.ttsLanguage);
       }
@@ -545,6 +596,9 @@ class TtsNotifier extends StateNotifier<TtsState> {
       _handler.setVoice(voiceName, locale);
   Future<List<Map<String, String>>> getVoicesForLocale(String locale) =>
       _handler.getVoicesForLocale(locale);
+  Future<List<Map<String, String>>> getEngines() => _handler.getEngines();
+  Future<void> setEngine(String engineName) => _handler.setEngine(engineName);
+  Future<void> speakTest() => _handler.speakTest();
 
   /// Schedule TTS start from a tapped word, cancelling any previous schedule.
   /// Shows immediate visual feedback (paragraph highlight) before playback

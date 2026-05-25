@@ -270,6 +270,11 @@ final voicesProvider = FutureProvider.family<List<Map<String, String>>, String>(
   },
 );
 
+/// TTS engines available on the device (Android only).
+final enginesProvider = FutureProvider<List<Map<String, String>>>(
+  (ref) => ref.read(ttsAudioHandlerProvider).getEngines(),
+);
+
 // ─── Article Reader ───────────────────────────────────────────────────────────
 
 /// Single provider that owns the full lifecycle of the currently-read article:

@@ -42,11 +42,37 @@ class ArticleRepositoryImpl implements ArticleRepository {
       return refreshed;
     }
 
-    final parsed = await _remote.fetch(url);
+    final result = await _remote.fetch(url);
+    final finalUrl = result.finalUrl;
+    final parsed = result.article;
+
+    // If the URL redirected, check whether the destination is already cached.
+    if (finalUrl != url) {
+      final cachedFinal = await _local.findByUrl(finalUrl);
+      if (cachedFinal != null) {
+        final refreshed = Article(
+          id: cachedFinal.id,
+          url: cachedFinal.url,
+          title: cachedFinal.title,
+          content: cachedFinal.content,
+          author: cachedFinal.author,
+          language: cachedFinal.language,
+          estimatedReadTime: cachedFinal.estimatedReadTime,
+          isBookmarked: cachedFinal.isBookmarked,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          prevUrl: cachedFinal.prevUrl,
+          nextUrl: cachedFinal.nextUrl,
+          homeUrl: cachedFinal.homeUrl,
+          isCached: true,
+        );
+        await _local.insertOrUpdate(refreshed);
+        return refreshed;
+      }
+    }
 
     final article = Article(
       id: _uuid.v4(),
-      url: url,
+      url: finalUrl,
       title: parsed.title,
       content: parsed.content,
       author: parsed.author,

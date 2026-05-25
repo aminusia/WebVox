@@ -9,6 +9,7 @@ class AppConstants {
   static const String prefAutoNext = 'auto_next';
   static const String prefAutoRead = 'auto_read';
   static const String prefTtsVoice = 'tts_voice';
+  static const String prefTtsEngine = 'tts_engine';
   static const String prefThemeMode = 'theme_mode';
 
   // Highlight style prefs
@@ -29,6 +30,8 @@ class AppConstants {
   static const bool defaultAutoNext = true;
   static const bool defaultAutoRead = false;
   static const String defaultThemeMode = 'system';
+  static const String defaultTtsEngine = '';
+  static const String googleTtsEngine = 'com.google.android.tts';
   static const bool defaultCachingEnabled = true;
   static const bool defaultCacheInBackground = false;
 
