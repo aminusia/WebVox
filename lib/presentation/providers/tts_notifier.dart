@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:webvox/core/services/voice_sync_service.dart';
+import 'package:webvox/data/database/voice_dao.dart';
 import 'package:webvox/domain/repositories/settings_repository.dart';
 
 // ─── Status ──────────────────────────────────────────────────────────────────
@@ -122,6 +126,7 @@ class TtsAudioHandler extends BaseAudioHandler {
     await _tts.setSpeechRate(_speed);
     await _tts.setVolume(1.0);
     await _tts.setPitch(1.0);
+    await _syncVoicesWithDatabase();
 
     // Word-level progress (Android 8+, iOS)
     _tts.setProgressHandler((String text, int start, int end, String word) {
@@ -169,6 +174,65 @@ class TtsAudioHandler extends BaseAudioHandler {
         ),
       );
     });
+  }
+
+  Future<void> _syncVoicesWithDatabase() async {
+    try {
+      final raw = await _tts.getVoices;
+      if (raw == null) {
+        _debugPrintLong('[WebVox][TTS] getVoices returned null');
+        return;
+      }
+
+      final voices = raw is List ? raw : [raw];
+
+      // ── Log (kept for debugging) ──────────────────────────────────────────
+      final buffer =
+          StringBuffer()
+            ..writeln('[WebVox][TTS] Available voices: ${voices.length}')
+            ..writeln('[WebVox][TTS] Raw getVoices type: ${raw.runtimeType}');
+
+      for (var i = 0; i < voices.length; i++) {
+        final voice = voices[i];
+        buffer.writeln('[WebVox][TTS] Voice #${i + 1}');
+        buffer.writeln('[WebVox][TTS]   type: ${voice.runtimeType}');
+        if (voice is Map) {
+          final normalized = voice.map(
+            (key, value) => MapEntry(key.toString(), value?.toString()),
+          );
+          buffer.writeln('[WebVox][TTS]   keys: ${normalized.keys.join(', ')}');
+          buffer.writeln('[WebVox][TTS]   data: ${jsonEncode(normalized)}');
+        } else {
+          buffer.writeln('[WebVox][TTS]   data: $voice');
+        }
+      }
+      _debugPrintLong(buffer.toString());
+
+      // ── Sync with DB ──────────────────────────────────────────────────────
+      final voiceMaps = <Map<String, String>>[];
+      for (final v in voices) {
+        if (v is Map) {
+          voiceMaps.add({
+            'name': v['name']?.toString() ?? '',
+            'locale': v['locale']?.toString() ?? '',
+            'features': v['features']?.toString() ?? '',
+            'quality': v['quality']?.toString() ?? '',
+          });
+        }
+      }
+      await VoiceSyncService.instance.sync(voiceMaps);
+    } catch (e, stackTrace) {
+      _debugPrintLong('[WebVox][TTS] Voice sync failed: $e\n$stackTrace');
+    }
+  }
+
+  void _debugPrintLong(String message) {
+    const chunkSize = 800;
+    for (var i = 0; i < message.length; i += chunkSize) {
+      final end =
+          i + chunkSize < message.length ? i + chunkSize : message.length;
+      debugPrint(message.substring(i, end));
+    }
   }
 
   // ── Internal helpers ───────────────────────────────────────────────────────
@@ -264,18 +328,28 @@ class TtsAudioHandler extends BaseAudioHandler {
     await _tts.speak('This is a voice test.');
   }
 
-  /// Returns voices available on the device filtered to [locale]'s language.
+  /// Returns voices available on the device filtered to [locale]'s language,
+  /// enriched with a `display_name` key from the database.
   Future<List<Map<String, String>>> getVoicesForLocale(String locale) async {
     final raw = await _tts.getVoices;
     if (raw == null) return [];
     final langCode = locale.split('-')[0].split('_')[0].toLowerCase();
+
+    // Load display names from DB for fast lookup
+    final allDbVoices = await VoiceDao.instance.getAll();
+    final displayNameMap = {for (final v in allDbVoices) v.name: v.displayName};
+
     final result = <Map<String, String>>[];
     for (final v in raw as List) {
       final map = v as Map;
       final name = map['name'] as String? ?? '';
       final vLocale = map['locale'] as String? ?? '';
       if (name.isNotEmpty && vLocale.toLowerCase().startsWith(langCode)) {
-        result.add({'name': name, 'locale': vLocale});
+        result.add({
+          'name': name,
+          'locale': vLocale,
+          'display_name': displayNameMap[name] ?? name,
+        });
       }
     }
     return result;

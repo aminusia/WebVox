@@ -232,7 +232,43 @@ class HtmlParser {
     final paragraphs = <String>[];
     _collectText(contentEl, paragraphs);
 
-    return paragraphs.map((p) => p.trim()).where((p) => p.length > 20).toList();
+    final cleaned =
+        paragraphs.map((p) => p.trim()).where((p) => p.length > 20).toList();
+    return _postProcessSingleParagraph(cleaned);
+  }
+
+  List<String> _postProcessSingleParagraph(List<String> paragraphs) {
+    if (paragraphs.length != 1) return paragraphs;
+
+    final paragraph = paragraphs.single;
+    final sentences = _splitSentences(paragraph);
+    if (sentences.length > 1) return sentences;
+
+    return [paragraph, paragraph];
+  }
+
+  List<String> _splitSentences(String text) {
+    final sentences = <String>[];
+    var start = 0;
+
+    for (var i = 0; i < text.length; i++) {
+      final char = text[i];
+      if (char != '.' && char != '!' && char != '?') continue;
+
+      final isEnd = i == text.length - 1;
+      final followedByWhitespace =
+          !isEnd && RegExp(r'\s').hasMatch(text[i + 1]);
+      if (!isEnd && !followedByWhitespace) continue;
+
+      final sentence = text.substring(start, i + 1).trim();
+      if (sentence.isNotEmpty) sentences.add(sentence);
+      start = i + 1;
+    }
+
+    final tail = text.substring(start).trim();
+    if (tail.isNotEmpty) sentences.add(tail);
+
+    return sentences;
   }
 
   void _collectText(Element element, List<String> out) {

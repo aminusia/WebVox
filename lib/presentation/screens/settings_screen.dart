@@ -535,18 +535,10 @@ class _VoiceSelector extends ConsumerWidget {
       data: (voices) {
         if (voices.isEmpty) return const SizedBox.shrink();
 
-        String displayName(String name) {
-          if (name.isEmpty) return 'Default (system)';
-          if (name.contains('#')) {
-            final variant = name.substring(name.indexOf('#') + 1);
-            final isRemote = variant.endsWith('-remote');
-            final label = variant
-                .replaceAll(RegExp(r'-(local|remote)$'), '')
-                .replaceAll('_', ' ');
-            return isRemote ? '$label ☁' : label;
-          }
-          return name;
-        }
+        String displayName(Map<String, String> v) =>
+            v['display_name']?.isNotEmpty == true
+                ? v['display_name']!
+                : (v['name'] ?? '');
 
         final currentVoice = settings.ttsVoice;
 
@@ -559,7 +551,7 @@ class _VoiceSelector extends ConsumerWidget {
             ...voices.map(
               (v) => DropdownMenuItem(
                 value: v['name'],
-                child: Text(displayName(v['name'] ?? '')),
+                child: Text(displayName(v)),
               ),
             ),
           ],

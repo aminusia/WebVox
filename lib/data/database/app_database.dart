@@ -185,6 +185,18 @@ class AppDatabase {
       // original name (which is used for matching new articles to groups).
       await db.execute('ALTER TABLE titles ADD COLUMN display_name TEXT');
     }
+    if (oldVersion < 9) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS tts_voices (
+          name TEXT PRIMARY KEY,
+          lang_tag TEXT NOT NULL,
+          locale TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          gender TEXT,
+          quality TEXT
+        )
+      ''');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -229,6 +241,17 @@ class AppDatabase {
         scroll_position REAL NOT NULL DEFAULT 0.0,
         last_read_index INTEGER NOT NULL DEFAULT 0,
         last_word_offset INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE tts_voices (
+        name TEXT PRIMARY KEY,
+        lang_tag TEXT NOT NULL,
+        locale TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        gender TEXT,
+        quality TEXT
       )
     ''');
 

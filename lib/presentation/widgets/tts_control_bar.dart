@@ -5,29 +5,6 @@ import 'package:webvox/core/theme/app_theme.dart';
 import 'package:webvox/presentation/providers/providers.dart';
 import 'package:webvox/presentation/providers/tts_notifier.dart';
 
-/// Returns a human-readable label from a raw TTS voice name.
-/// Handles Google TTS voice patterns like:
-///   "en-us-x-sfg#female_1-local"  → "female 1 ✦" (Google, local)
-///   "en-us-x-sfg#male_2-remote"   → "male 2 ☁" (Google, remote/network)
-///   Plain names are returned as-is (trimmed).
-String _voiceDisplayName(String name) {
-  if (name.isEmpty) return 'Default';
-
-  // Google TTS pattern: contains '#'
-  if (name.contains('#')) {
-    final hashIdx = name.indexOf('#');
-    final variant = name.substring(hashIdx + 1);
-    final isRemote = variant.endsWith('-remote');
-    final label = variant
-        .replaceAll(RegExp(r'-(local|remote)$'), '')
-        .replaceAll('_', ' ');
-    final suffix = isRemote ? ' ☁' : '';
-    return '${label.isNotEmpty ? label : name}$suffix';
-  }
-
-  return name;
-}
-
 class TtsControlBar extends ConsumerWidget {
   final List<String> paragraphs;
   final String articleLanguage;
@@ -110,175 +87,178 @@ class TtsControlBar extends ConsumerWidget {
                       backgroundColor: Colors.white12,
                     ),
                   ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Speed selector
-                    // _SpeedButton(
-                    //   speed: ttsState.speed,
-                    //   onChanged: notifier.setSpeed,
-                    // ),
-                    // Voice selector (inline, compact)
-                    voicesAsync.maybeWhen(
-                      data: (voices) {
-                        if (voices.isEmpty) return const SizedBox.shrink();
-                        return _VoiceButton(
-                          voices: voices,
-                          currentVoice: ttsState.voiceName,
-                          language: articleLanguage,
-                        );
-                      },
-                      orElse: () => const SizedBox.shrink(),
-                    ),
-                    // Skip previous
-                    Opacity(
-                      opacity: ttsState.isActive ? 0.85 : 0.4,
-                      child: IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(
-                          Icons.skip_previous_rounded,
-                          color: AppColors.onBar,
-                          size: 20,
-                        ),
-                        tooltip: 'Previous paragraph',
-                        onPressed:
-                            ttsState.isActive
-                                ? () {
-                                  HapticFeedback.mediumImpact();
-                                  notifier.skipPrevious();
-                                }
-                                : null,
-                      ),
-                    ),
-                    // Play / Pause
-                    TweenAnimationBuilder<double>(
-                      tween: Tween<double>(
-                        begin: 0,
-                        end: ttsState.isPlaying ? 1.0 : 0.0,
-                      ),
-                      duration: const Duration(milliseconds: 600),
-                      curve: Curves.easeInOut,
-                      builder: (context, glowValue, child) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow:
-                                glowValue > 0
-                                    ? [
-                                      BoxShadow(
-                                        color: AppColors.primaryColor.withAlpha(
-                                          (glowValue * 100).round(),
-                                        ),
-                                        blurRadius: glowValue * 20,
-                                        spreadRadius: glowValue * 2,
-                                      ),
-                                    ]
-                                    : null,
-                          ),
-                          child: child,
-                        );
-                      },
-                      child: Builder(
-                        builder: (context) {
-                          if (!ttsState.isActive) {
-                            return FilledButton.icon(
-                              icon: const Icon(
-                                Icons.play_arrow_rounded,
-                                size: 18,
-                              ),
-                              label: const Text('Read'),
-                              style: FilledButton.styleFrom(
-                                foregroundColor: AppColors.onBar,
-                                backgroundColor: AppColors.primaryColor,
-                                visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                ),
-                              ),
-                              onPressed: () {
-                                HapticFeedback.mediumImpact();
-                                notifier.play(
-                                  paragraphs,
-                                  startIndex: startIndex,
-                                  wordOffset: startWordOffset,
-                                  language: articleLanguage,
-                                  articleTitle: articleTitle,
-                                );
-                              },
-                            );
-                          } else if (ttsState.isPlaying) {
-                            return IconButton(
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(
-                                Icons.pause_rounded,
-                                color: AppColors.onBar,
-                              ),
-                              tooltip: 'Pause',
-                              color: AppColors.onBar,
-                              onPressed: () {
-                                HapticFeedback.lightImpact();
-                                notifier.pause();
-                              },
-                            );
-                          } else {
-                            return IconButton(
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(
-                                Icons.play_arrow_rounded,
-                                color: AppColors.onBar,
-                              ),
-                              tooltip: 'Resume',
-                              color: AppColors.onBar,
-                              onPressed: () {
-                                HapticFeedback.mediumImpact();
-                                notifier.resume();
-                              },
-                            );
-                          }
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Speed selector
+                      // _SpeedButton(
+                      //   speed: ttsState.speed,
+                      //   onChanged: notifier.setSpeed,
+                      // ),
+                      // Voice selector (inline, compact)
+                      voicesAsync.maybeWhen(
+                        data: (voices) {
+                          if (voices.isEmpty) return const SizedBox.shrink();
+                          return _VoiceButton(
+                            voices: voices,
+                            currentVoice: ttsState.voiceName,
+                            language: articleLanguage,
+                          );
                         },
+                        orElse: () => const SizedBox.shrink(),
                       ),
-                    ),
-                    // Skip next
-                    Opacity(
-                      opacity: ttsState.isActive ? 0.85 : 0.4,
-                      child: IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(
-                          Icons.skip_next_rounded,
-                          color: AppColors.onBar,
-                          size: 20,
+                      // Skip previous
+                      Opacity(
+                        opacity: ttsState.isActive ? 0.85 : 0.4,
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(
+                            Icons.skip_previous_rounded,
+                            color: AppColors.onBar,
+                            size: 20,
+                          ),
+                          tooltip: 'Previous paragraph',
+                          onPressed:
+                              ttsState.isActive
+                                  ? () {
+                                    HapticFeedback.mediumImpact();
+                                    notifier.skipPrevious();
+                                  }
+                                  : null,
                         ),
-                        tooltip: 'Next paragraph',
-                        onPressed:
-                            ttsState.isActive
-                                ? () {
+                      ),
+                      // Play / Pause
+                      TweenAnimationBuilder<double>(
+                        tween: Tween<double>(
+                          begin: 0,
+                          end: ttsState.isPlaying ? 1.0 : 0.0,
+                        ),
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeInOut,
+                        builder: (context, glowValue, child) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow:
+                                  glowValue > 0
+                                      ? [
+                                        BoxShadow(
+                                          color: AppColors.primaryColor
+                                              .withAlpha(
+                                                (glowValue * 100).round(),
+                                              ),
+                                          blurRadius: glowValue * 20,
+                                          spreadRadius: glowValue * 2,
+                                        ),
+                                      ]
+                                      : null,
+                            ),
+                            child: child,
+                          );
+                        },
+                        child: Builder(
+                          builder: (context) {
+                            if (!ttsState.isActive) {
+                              return FilledButton.icon(
+                                icon: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('Read'),
+                                style: FilledButton.styleFrom(
+                                  foregroundColor: AppColors.onBar,
+                                  backgroundColor: AppColors.primaryColor,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                ),
+                                onPressed: () {
                                   HapticFeedback.mediumImpact();
-                                  notifier.skipNext();
-                                }
-                                : null,
-                      ),
-                    ),
-                    // Position text or navigate-to-reader icon
-                    if (onNavigateToReader != null)
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(
-                          Icons.article_outlined,
-                          color: AppColors.onBar,
+                                  notifier.play(
+                                    paragraphs,
+                                    startIndex: startIndex,
+                                    wordOffset: startWordOffset,
+                                    language: articleLanguage,
+                                    articleTitle: articleTitle,
+                                  );
+                                },
+                              );
+                            } else if (ttsState.isPlaying) {
+                              return IconButton(
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(
+                                  Icons.pause_rounded,
+                                  color: AppColors.onBar,
+                                ),
+                                tooltip: 'Pause',
+                                color: AppColors.onBar,
+                                onPressed: () {
+                                  HapticFeedback.lightImpact();
+                                  notifier.pause();
+                                },
+                              );
+                            } else {
+                              return IconButton(
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: AppColors.onBar,
+                                ),
+                                tooltip: 'Resume',
+                                color: AppColors.onBar,
+                                onPressed: () {
+                                  HapticFeedback.mediumImpact();
+                                  notifier.resume();
+                                },
+                              );
+                            }
+                          },
                         ),
-                        tooltip: 'Go to article',
-                        onPressed: onNavigateToReader,
-                      )
-                    else
-                      Text(
-                        ttsState.total > 0
-                            ? '${ttsState.currentIndex + 1}/${ttsState.total}'
-                            : '~',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.onBar,
+                      ),
+                      // Skip next
+                      Opacity(
+                        opacity: ttsState.isActive ? 0.85 : 0.4,
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(
+                            Icons.skip_next_rounded,
+                            color: AppColors.onBar,
+                            size: 20,
+                          ),
+                          tooltip: 'Next paragraph',
+                          onPressed:
+                              ttsState.isActive
+                                  ? () {
+                                    HapticFeedback.mediumImpact();
+                                    notifier.skipNext();
+                                  }
+                                  : null,
                         ),
                       ),
-                  ],
+                      // Position text or navigate-to-reader icon
+                      if (onNavigateToReader != null)
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(
+                            Icons.article_outlined,
+                            color: AppColors.onBar,
+                          ),
+                          tooltip: 'Go to article',
+                          onPressed: onNavigateToReader,
+                        )
+                      else
+                        Text(
+                          ttsState.total > 0
+                              ? '${ttsState.currentIndex + 1}/${ttsState.total}'
+                              : '~',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: AppColors.onBar),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -300,46 +280,140 @@ class _VoiceButton extends ConsumerWidget {
     required this.language,
   });
 
+  String _labelFor(String voiceName) {
+    if (voiceName.isEmpty) return 'Default';
+    try {
+      return voices.firstWhere((v) => v['name'] == voiceName)['display_name'] ??
+          voiceName;
+    } catch (_) {
+      return voiceName;
+    }
+  }
+
+  void _showSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder:
+          (_) => _VoicePickerSheet(
+            voices: voices,
+            currentVoice: currentVoice,
+            language: language,
+            onSelected: (name) {
+              final voiceMap = voices.firstWhere(
+                (v) => v['name'] == name,
+                orElse: () => {'locale': language},
+              );
+              final locale = voiceMap['locale'] ?? language;
+              ref.read(ttsProvider.notifier).setVoice(name, locale);
+              ref.read(settingsProvider).whenData((s) {
+                ref
+                    .read(settingsProvider.notifier)
+                    .update(s.copyWith(ttsVoice: name));
+              });
+            },
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final label = _voiceDisplayName(currentVoice);
+    final label = _labelFor(currentVoice);
+    return Tooltip(
+      message: 'Voice: $label',
+      child: IconButton(
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(
+          Icons.record_voice_over_rounded,
+          size: 20,
+          color: AppColors.onBar,
+        ),
+        onPressed: () => _showSheet(context, ref),
+      ),
+    );
+  }
+}
 
-    return PopupMenuButton<String>(
-      tooltip: 'Select voice',
-      initialValue: currentVoice.isEmpty ? '' : currentVoice,
-      onSelected: (name) {
-        final voiceMap = voices.firstWhere(
-          (v) => v['name'] == name,
-          orElse: () => {'locale': language},
-        );
-        final locale = voiceMap['locale'] ?? language;
-        ref.read(ttsProvider.notifier).setVoice(name, locale);
-        ref.read(settingsProvider).whenData((s) {
-          ref
-              .read(settingsProvider.notifier)
-              .update(s.copyWith(ttsVoice: name));
-        });
-      },
-      itemBuilder:
-          (_) => [
-            const PopupMenuItem<String>(value: '', child: Text('Default')),
-            ...voices.map(
-              (v) => PopupMenuItem<String>(
-                value: v['name'],
-                child: Text(_voiceDisplayName(v['name'] ?? '')),
+class _VoicePickerSheet extends StatelessWidget {
+  final List<Map<String, String>> voices;
+  final String currentVoice;
+  final String language;
+  final void Function(String name) onSelected;
+
+  const _VoicePickerSheet({
+    required this.voices,
+    required this.currentVoice,
+    required this.language,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final allVoices = [
+      const {'name': '', 'display_name': 'Default'},
+      ...voices,
+    ];
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.45,
+      minChildSize: 0.25,
+      maxChildSize: 0.85,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            // Drag handle
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Select Voice',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: allVoices.length,
+                itemBuilder: (context, index) {
+                  final v = allVoices[index];
+                  final name = v['name'] ?? '';
+                  final displayName = v['display_name'] ?? name;
+                  final isSelected = name == currentVoice;
+                  return ListTile(
+                    title: Text(displayName.isEmpty ? 'Default' : displayName),
+                    trailing:
+                        isSelected
+                            ? Icon(
+                              Icons.check_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                            )
+                            : null,
+                    selected: isSelected,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onSelected(name);
+                    },
+                  );
+                },
               ),
             ),
           ],
-      child: Tooltip(
-        message: label,
-        child: Icon(
-          Icons.record_voice_over_rounded,
-          size: 20,
-          // On the dark bar, use full white when a voice is selected,
-          // dim white when using the default.
-          color: AppColors.onBar,
-        ),
-      ),
+        );
+      },
     );
   }
 }
