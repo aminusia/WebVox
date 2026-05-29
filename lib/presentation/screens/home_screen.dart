@@ -299,7 +299,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             Image.asset('assets/appicon-32.png', width: 24, height: 24),
             const SizedBox(width: 8),
             const Text(
-              'WebReader',
+              'WebVox',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
@@ -881,7 +881,7 @@ class _GetStartedPage extends StatelessWidget {
                 const SizedBox(height: 12),
 
                 const Text(
-                  'WebReader',
+                  'WebVox',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: titleColor,

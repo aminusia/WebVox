@@ -294,6 +294,7 @@ class _VoiceButton extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -362,90 +363,95 @@ class _VoicePickerSheet extends StatelessWidget {
       minChildSize: 0.25,
       maxChildSize: 0.85,
       builder: (context, scrollController) {
-        return Column(
-          children: [
-            // Drag handle
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.barColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              // Drag handle
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Select Voice',
-                style: Theme.of(context).textTheme.titleMedium,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+                child: Text(
+                  'Select Voice',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: allVoices.length,
-                itemBuilder: (context, index) {
-                  final v = allVoices[index];
-                  final name = v['name'] ?? '';
-                  final displayName = v['display_name'] ?? name;
-                  final isSelected = name == currentVoice;
-                  return ListTile(
-                    title: Text(displayName.isEmpty ? 'Default' : displayName),
-                    trailing:
-                        isSelected
-                            ? Icon(
-                              Icons.check_rounded,
-                              color: Theme.of(context).colorScheme.primary,
-                            )
-                            : null,
-                    selected: isSelected,
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      onSelected(name);
-                    },
-                  );
-                },
+              Divider(
+                height: 1,
+                color: AppColors.primaryColor.withValues(alpha: 0.5),
               ),
-            ),
-          ],
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: allVoices.length,
+                  itemBuilder: (context, index) {
+                    final v = allVoices[index];
+                    final name = v['name'] ?? '';
+                    final displayName = v['display_name'] ?? name;
+                    final isSelected = name == currentVoice;
+                    return Container(
+                      decoration: BoxDecoration(
+                        color:
+                            isSelected
+                                ? AppColors.primaryColor.withValues(alpha: 0.3)
+                                : Colors.transparent,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            contentPadding: EdgeInsets.fromLTRB(32, 4, 32, 4),
+                            title: Text(
+                              displayName.isEmpty ? 'Default' : displayName,
+                            ),
+                            trailing:
+                                isSelected
+                                    ? Icon(
+                                      Icons.check_rounded,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    )
+                                    : null,
+                            selected: isSelected,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              onSelected(name);
+                            },
+                          ),
+                          Divider(
+                            height: 1,
+                            thickness: 0.5,
+                            indent: 16,
+                            endIndent: 16,
+                            color: AppColors.primaryColor.withValues(
+                              alpha: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         );
       },
-    );
-  }
-}
-
-class _SpeedButton extends StatelessWidget {
-  final double speed;
-  final Future<void> Function(double) onChanged;
-
-  const _SpeedButton({required this.speed, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final label =
-        speed == speed.truncateToDouble()
-            ? '${speed.toInt()}×'
-            : '${speed.toStringAsFixed(1)}×';
-
-    return PopupMenuButton<double>(
-      tooltip: 'Speed',
-      initialValue: speed,
-      onSelected: onChanged,
-      itemBuilder:
-          (_) => const [
-            PopupMenuItem(value: 0.25, child: Text('0.25×')),
-            PopupMenuItem(value: 0.5, child: Text('0.5×')),
-            PopupMenuItem(value: 0.75, child: Text('0.75×')),
-            PopupMenuItem(value: 1.0, child: Text('1.0×')),
-            PopupMenuItem(value: 1.25, child: Text('1.25×')),
-            PopupMenuItem(value: 1.5, child: Text('1.5×')),
-            PopupMenuItem(value: 2.0, child: Text('2.0×')),
-          ],
-      child: Chip(visualDensity: VisualDensity.compact, label: Text(label)),
     );
   }
 }

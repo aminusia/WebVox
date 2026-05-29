@@ -610,6 +610,11 @@ class TtsNotifier extends StateNotifier<TtsState> {
   StreamSubscription<TtsState>? _sub;
   Timer? _wordTapTimer;
 
+  /// Completes when the stored engine + voice have been applied to the handler.
+  /// Any call to [play] waits on this so the correct voice is used from the
+  /// very first utterance, even if the user taps Read immediately after launch.
+  final _voiceReady = Completer<void>();
+
   TtsNotifier(this._handler, this._settingsRepo)
     : super(_handler.currentTtsState) {
     _sub = _handler.ttsStateStream.listen((s) {
@@ -619,17 +624,27 @@ class TtsNotifier extends StateNotifier<TtsState> {
   }
 
   Future<void> _applyStoredVoice() async {
-    await _handler.initialized;
-    if (!mounted) return;
     try {
+      await _handler.initialized;
+      if (!mounted) return;
       final settings = await _settingsRepo.getSettings();
       if (mounted && settings.ttsEngine.isNotEmpty) {
         await _handler.setEngine(settings.ttsEngine);
       }
       if (mounted && settings.ttsVoice.isNotEmpty) {
-        await _handler.setVoice(settings.ttsVoice, settings.ttsLanguage);
+        // Look up the raw TTS locale from the DB so Samsung voices like
+        // 'eng-x-lvariant-f00' are restored correctly instead of the
+        // BCP-47 ttsLanguage tag (e.g. 'en-US') which TTS engines reject.
+        final allVoices = await VoiceDao.instance.getAll();
+        final voiceEntry =
+            allVoices.where((v) => v.name == settings.ttsVoice).firstOrNull;
+        final locale = voiceEntry?.locale ?? settings.ttsLanguage;
+        await _handler.setVoice(settings.ttsVoice, locale);
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      if (!_voiceReady.isCompleted) _voiceReady.complete();
+    }
   }
 
   Future<void> play(
@@ -638,13 +653,16 @@ class TtsNotifier extends StateNotifier<TtsState> {
     int wordOffset = 0,
     String? language,
     String? articleTitle,
-  }) => _handler.loadAndPlay(
-    paragraphs: paragraphs,
-    startIndex: startIndex,
-    wordOffset: wordOffset,
-    language: language,
-    articleTitle: articleTitle,
-  );
+  }) async {
+    await _voiceReady.future;
+    return _handler.loadAndPlay(
+      paragraphs: paragraphs,
+      startIndex: startIndex,
+      wordOffset: wordOffset,
+      language: language,
+      articleTitle: articleTitle,
+    );
+  }
 
   /// Replaces the queue without stopping playback — see [TtsAudioHandler.transitionToContent].
   Future<void> transitionToContent(
@@ -687,8 +705,8 @@ class TtsNotifier extends StateNotifier<TtsState> {
   }) {
     _wordTapTimer?.cancel();
     _wordTapTimer = Timer(delay, () {
-      _handler.loadAndPlay(
-        paragraphs: paragraphs,
+      play(
+        paragraphs,
         startIndex: paragraphIndex,
         wordOffset: charOffset,
         language: language,
