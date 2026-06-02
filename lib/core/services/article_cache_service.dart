@@ -22,6 +22,7 @@ class ArticleCacheService {
   final Random _rng = Random();
 
   final List<String> _nextQueue = [];
+  final Map<String, String> _referersByUrl = {};
 
   Timer? _timer;
   bool _paused = false;
@@ -59,6 +60,7 @@ class ArticleCacheService {
     _timer?.cancel();
     _timer = null;
     _nextQueue.clear();
+    _referersByUrl.clear();
     _fetchesSincePageOpen = 0;
 
     // Save the currently-read article if it hasn't been cached yet.
@@ -106,6 +108,7 @@ class ArticleCacheService {
     _timer?.cancel();
     _timer = null;
     _nextQueue.clear();
+    _referersByUrl.clear();
     await _saveQueue();
     _log('Cache queue cleared.');
   }
@@ -123,6 +126,7 @@ class ArticleCacheService {
   Future<void> _seedFromArticle(Article article) async {
     if (article.nextUrl != null && !await _isCachedOrQueued(article.nextUrl!)) {
       _nextQueue.add(article.nextUrl!);
+      _referersByUrl[article.nextUrl!] = article.url;
     }
   }
 
@@ -184,6 +188,7 @@ class ArticleCacheService {
         if (alreadyCached.nextUrl != null &&
             !await _isCachedOrQueued(alreadyCached.nextUrl!)) {
           _nextQueue.add(alreadyCached.nextUrl!);
+          _referersByUrl[alreadyCached.nextUrl!] = alreadyCached.url;
           _log('Enqueued next: ${alreadyCached.nextUrl}');
         }
         await _saveQueue();
@@ -192,13 +197,16 @@ class ArticleCacheService {
 
       // Not cached — fetch from network, then break to apply the delay.
       _log('Caching next: $url …');
+      final refererUrl = _referersByUrl[url];
       try {
-        final article = await _repo.fetchArticle(url);
+        final article = await _repo.fetchArticle(url, refererUrl: refererUrl);
+        _referersByUrl.remove(url);
         _log('Cached next OK: "${article.title}"');
         // Incrementally extend the chain
         if (article.nextUrl != null &&
             !await _isCachedOrQueued(article.nextUrl!)) {
           _nextQueue.add(article.nextUrl!);
+          _referersByUrl[article.nextUrl!] = article.url;
           _log('Enqueued next: ${article.nextUrl}');
         }
         _fetchesSincePageOpen++;

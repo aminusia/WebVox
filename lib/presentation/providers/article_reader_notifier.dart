@@ -97,6 +97,7 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
   Timer? _saveTimer;
   Timer? _backgroundRetryTimer;
   String? _pendingAutoNextUrl;
+  String? _pendingAutoNextRefererUrl;
   bool _autoPlayScheduled = false;
 
   @override
@@ -152,7 +153,7 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
       if (current != null && markCurrentCompleted) {
         await repo.markArticleCompleted(current.id);
       }
-      final newArticle = await repo.fetchArticle(url);
+      final newArticle = await repo.fetchArticle(url, refererUrl: current?.url);
 
       // Seamless TTS hand-off — keeps audio focus and notification alive.
       ref
@@ -181,7 +182,7 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
     try {
       final newArticle = await ref
           .read(articleRepositoryProvider)
-          .fetchArticle(current.url);
+          .fetchArticle(current.url, refererUrl: current.prevUrl);
       await _switchToArticle(newArticle, resetProgress: false);
     } catch (e) {
       state = state.copyWith(isLoading: false);
@@ -313,7 +314,11 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
     try {
       final repo = ref.read(articleRepositoryProvider);
       if (article != null) await repo.markArticleCompleted(article.id);
-      final newArticle = await repo.fetchArticle(targetUrl);
+      final refererUrl = article?.url;
+      final newArticle = await repo.fetchArticle(
+        targetUrl,
+        refererUrl: refererUrl,
+      );
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(targetUrl);
       ref.read(recentArticlesProvider.notifier).load();
       await _switchToArticle(
@@ -332,6 +337,7 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
           msg.contains('ClientException');
       if (isNetworkError) {
         _pendingAutoNextUrl = targetUrl;
+        _pendingAutoNextRefererUrl = article?.url;
         _backgroundRetryTimer?.cancel();
         _backgroundRetryTimer = Timer.periodic(
           const Duration(seconds: 15),
@@ -345,15 +351,21 @@ class ArticleReaderNotifier extends Notifier<ArticleReaderState> {
     if (_pendingAutoNextUrl == null) {
       _backgroundRetryTimer?.cancel();
       _backgroundRetryTimer = null;
+      _pendingAutoNextRefererUrl = null;
       return;
     }
     final targetUrl = _pendingAutoNextUrl!;
+    final refererUrl = _pendingAutoNextRefererUrl;
     try {
       final repo = ref.read(articleRepositoryProvider);
-      final newArticle = await repo.fetchArticle(targetUrl);
+      final newArticle = await repo.fetchArticle(
+        targetUrl,
+        refererUrl: refererUrl,
+      );
       _backgroundRetryTimer?.cancel();
       _backgroundRetryTimer = null;
       _pendingAutoNextUrl = null;
+      _pendingAutoNextRefererUrl = null;
       await ref.read(settingsRepositoryProvider).setLastArticleUrl(targetUrl);
       ref.read(recentArticlesProvider.notifier).load();
       await _switchToArticle(

@@ -19,7 +19,7 @@ class ArticleRepositoryImpl implements ArticleRepository {
        _uuid = const Uuid();
 
   @override
-  Future<Article> fetchArticle(String url) async {
+  Future<Article> fetchArticle(String url, {String? refererUrl}) async {
     final cached = await _local.findByUrl(url);
     if (cached != null) {
       // Update createdAt so re-accessed articles bubble up in the recent list.
@@ -42,7 +42,7 @@ class ArticleRepositoryImpl implements ArticleRepository {
       return refreshed;
     }
 
-    final result = await _remote.fetch(url);
+    final result = await _remote.fetch(url, refererUrl: refererUrl);
     final finalUrl = result.finalUrl;
     final parsed = result.article;
 

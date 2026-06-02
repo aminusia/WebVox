@@ -142,25 +142,41 @@ class HtmlParser {
   }
 
   String _extractTitle(Document document) {
-    // Try og:title, twitter:title, then <title>
-    final ogTitle =
-        document
-            .querySelector('meta[property="og:title"]')
-            ?.attributes['content'];
-    if (ogTitle != null && ogTitle.isNotEmpty) return ogTitle.trim();
+    // For SPA pages the <title> tag is updated after hydration and is the most
+    // reliable source. og:title / twitter:title may be SSR-static placeholders.
+    // We collect all candidates, clean each one, and pick the most specific.
+    final candidates = <String?>[
+      // x-hydrated-title is injected by renderUrlToHtml after JS hydration —
+      // it reflects document.title at the moment the WebView was snapshotted.
+      document
+          .querySelector('meta[name="x-hydrated-title"]')
+          ?.attributes['content'],
+      document.querySelector('title')?.text,
+      document
+          .querySelector('meta[property="og:title"]')
+          ?.attributes['content'],
+      document
+          .querySelector('meta[name="twitter:title"]')
+          ?.attributes['content'],
+      document.querySelector('h1')?.text,
+    ];
 
-    final twitterTitle =
-        document
-            .querySelector('meta[name="twitter:title"]')
-            ?.attributes['content'];
-    if (twitterTitle != null && twitterTitle.isNotEmpty) {
-      return twitterTitle.trim();
+    for (final raw in candidates) {
+      if (raw == null) continue;
+      final cleaned = _cleanTitle(raw);
+      if (cleaned.isNotEmpty) return cleaned;
     }
+    return 'Untitled';
+  }
 
-    final h1 = document.querySelector('h1')?.text.trim();
-    if (h1 != null && h1.isNotEmpty) return h1;
-
-    return document.querySelector('title')?.text.trim() ?? 'Untitled';
+  /// Strips site-name suffixes separated by " | " or " - " and trims the result.
+  /// e.g. "Martial Peak / Chapter 5260 | Read on NovelArrow" → "Martial Peak / Chapter 5260"
+  String _cleanTitle(String raw) {
+    var title = raw.trim();
+    // Remove trailing " | Site name" style suffix
+    final pipeIdx = title.lastIndexOf(' | ');
+    if (pipeIdx > 0) title = title.substring(0, pipeIdx).trim();
+    return title;
   }
 
   String? _extractAuthor(Document document) {
@@ -368,6 +384,7 @@ class HtmlParser {
       final text = link.text.toLowerCase().trim();
       final cls = (link.attributes['class'] ?? '').toLowerCase();
       final title = (link.attributes['title'] ?? '').toLowerCase();
+      final ariaLabel = (link.attributes['aria-label'] ?? '').toLowerCase();
       final absoluteUrl = _resolveUrl(href, baseUri);
 
       // Check by CSS class pattern (e.g. prevchap, prev-chapter, next_chap, chapindex)
@@ -392,12 +409,15 @@ class HtmlParser {
               effectiveText.contains('previous') ||
               effectiveText.contains('prev') ||
               _containsWord(title, 'prev') ||
-              _containsWord(title, 'previous'))) {
+              _containsWord(title, 'previous') ||
+              ariaLabel.contains('previous') ||
+              ariaLabel.contains('prev'))) {
         result['prev'] = absoluteUrl;
       } else if (result['next'] == null &&
           (isNextClass ||
               effectiveText.contains('next') ||
-              _containsWord(title, 'next'))) {
+              _containsWord(title, 'next') ||
+              ariaLabel.contains('next'))) {
         result['next'] = absoluteUrl;
       } else if (result['home'] == null &&
           (isHomeClass ||
@@ -405,12 +425,83 @@ class HtmlParser {
               effectiveText.contains('home') ||
               effectiveText == 'home page' ||
               _containsWord(title, 'index') ||
-              _containsWord(title, 'home'))) {
+              _containsWord(title, 'home') ||
+              ariaLabel.contains('chapter list') ||
+              ariaLabel.contains('index') ||
+              ariaLabel.contains('contents'))) {
         result['home'] = absoluteUrl;
       }
     }
 
+    // Search for navigation buttons with aria-label attributes
+    _extractNavigationFromButtons(document, baseUri, result);
+
     return result;
+  }
+
+  /// Extracts navigation links from button elements with aria-label attributes.
+  /// Buttons like "Previous chapter", "Next chapter", "Open chapter list" typically
+  /// have an aria-label that identifies their purpose, and may be nested in <a> tags.
+  void _extractNavigationFromButtons(
+    Document document,
+    Uri baseUri,
+    Map<String, String?> result,
+  ) {
+    final buttons = document.querySelectorAll('button[aria-label]');
+    for (final button in buttons) {
+      final ariaLabel = button.attributes['aria-label']?.toLowerCase() ?? '';
+      final title = button.attributes['title']?.toLowerCase() ?? '';
+      final effectiveLabel = title.isNotEmpty ? title : ariaLabel;
+
+      if (effectiveLabel.isEmpty) continue;
+
+      // Determine navigation type from aria-label
+      final isPrev =
+          effectiveLabel.contains('previous') ||
+          effectiveLabel.contains('prev') ||
+          effectiveLabel.contains('back');
+      final isNext =
+          effectiveLabel.contains('next') || effectiveLabel.contains('forward');
+      final isHome =
+          effectiveLabel.contains('index') ||
+          effectiveLabel.contains('list') ||
+          effectiveLabel.contains('table of contents') ||
+          effectiveLabel.contains('toc') ||
+          effectiveLabel.contains('menu') ||
+          effectiveLabel.contains('home');
+
+      if (!isPrev && !isNext && !isHome) continue;
+
+      // Try to find the href from parent anchor element
+      Element? href_parent = button.parent;
+      String? href;
+
+      while (href_parent != null &&
+          href_parent.localName?.toLowerCase() != 'body') {
+        if (href_parent.localName?.toLowerCase() == 'a') {
+          href = href_parent.attributes['href'];
+          if (href != null && href.isNotEmpty) break;
+        }
+        href_parent = href_parent.parent;
+      }
+
+      // If no href from parent, try data attributes on the button
+      if (href == null || href.isEmpty) {
+        href = button.attributes['data-href'] ?? button.attributes['data-url'];
+      }
+
+      if (href == null || href.isEmpty) continue;
+
+      final absoluteUrl = _resolveUrl(href, baseUri);
+
+      if (isPrev && result['prev'] == null) {
+        result['prev'] = absoluteUrl;
+      } else if (isNext && result['next'] == null) {
+        result['next'] = absoluteUrl;
+      } else if (isHome && result['home'] == null) {
+        result['home'] = absoluteUrl;
+      }
+    }
   }
 
   /// Returns true if [text] contains [word] as a whole word or word-part

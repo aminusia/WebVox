@@ -2,7 +2,7 @@ import 'package:webvox/domain/entities/article.dart';
 import 'package:webvox/domain/entities/title_group.dart';
 
 abstract class ArticleRepository {
-  Future<Article> fetchArticle(String url);
+  Future<Article> fetchArticle(String url, {String? refererUrl});
   Future<List<Article>> getRecentArticles();
   Future<List<Article>> getBookmarks();
   Future<Article?> getCachedArticle(String url);
