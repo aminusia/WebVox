@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webvox/core/theme/app_theme.dart';
 import 'package:webvox/domain/entities/article.dart';
@@ -595,70 +596,69 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Navigation buttons (top)
-                          if (article.prevUrl != null ||
-                              article.nextUrl != null ||
-                              article.homeUrl != null) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: Wrap(
-                                  spacing: 8,
-                                  alignment: WrapAlignment.center,
-                                  children: [
-                                    if (article.prevUrl != null)
-                                      ElevatedButton(
-                                        onPressed:
-                                            isLoading
-                                                ? null
-                                                : () => _navigateToUrl(
-                                                  article.prevUrl,
-                                                  resetProgress: true,
-                                                ),
-                                        child: const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.chevron_left, size: 18),
-                                            SizedBox(width: 8),
-                                            Text('Prev'),
-                                          ],
-                                        ),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: Wrap(
+                                spacing: 8,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  if (article.prevUrl != null)
+                                    ElevatedButton(
+                                      onPressed:
+                                          isLoading
+                                              ? null
+                                              : () => _navigateToUrl(
+                                                article.prevUrl,
+                                                resetProgress: true,
+                                              ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.chevron_left, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Prev'),
+                                        ],
                                       ),
-                                    if (article.homeUrl != null)
-                                      ElevatedButton.icon(
-                                        onPressed:
-                                            isLoading
-                                                ? null
-                                                : () => _navigateToUrl(
-                                                  article.homeUrl,
-                                                ),
-                                        icon: const Icon(Icons.home),
-                                        label: const Text('Home'),
+                                    ),
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      final uri = Uri.parse(article.url);
+                                      await launchUrl(
+                                        uri,
+                                        mode: LaunchMode.externalApplication,
+                                      );
+                                    },
+                                    icon: const Icon(
+                                      Icons.open_in_new,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Website'),
+                                  ),
+                                  if (article.nextUrl != null)
+                                    ElevatedButton(
+                                      onPressed:
+                                          isLoading
+                                              ? null
+                                              : () => _navigateToUrl(
+                                                article.nextUrl,
+                                                resetProgress: true,
+                                                markCurrentCompleted: true,
+                                              ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('Next'),
+                                          SizedBox(width: 8),
+                                          Icon(Icons.chevron_right, size: 18),
+                                        ],
                                       ),
-                                    if (article.nextUrl != null)
-                                      ElevatedButton(
-                                        onPressed:
-                                            isLoading
-                                                ? null
-                                                : () => _navigateToUrl(
-                                                  article.nextUrl,
-                                                  resetProgress: true,
-                                                  markCurrentCompleted: true,
-                                                ),
-                                        child: const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text('Next'),
-                                            SizedBox(width: 8),
-                                            Icon(Icons.chevron_right, size: 18),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
-                                ),
+                                    ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                           const SizedBox(height: 32),
                           Text(
                             article.title,
@@ -703,65 +703,62 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                           ),
                           const SizedBox(height: 32),
                           // Navigation buttons (bottom)
-                          if (article.prevUrl != null ||
-                              article.nextUrl != null ||
-                              article.homeUrl != null)
-                            Center(
-                              child: Wrap(
-                                spacing: 8,
-                                alignment: WrapAlignment.center,
-                                children: [
-                                  if (article.prevUrl != null)
-                                    ElevatedButton(
-                                      onPressed:
-                                          isLoading
-                                              ? null
-                                              : () => _navigateToUrl(
-                                                article.prevUrl,
-                                                resetProgress: true,
-                                              ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.chevron_left, size: 18),
-                                          SizedBox(width: 8),
-                                          Text('Prev'),
-                                        ],
-                                      ),
+                          Center(
+                            child: Wrap(
+                              spacing: 8,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                if (article.prevUrl != null)
+                                  ElevatedButton(
+                                    onPressed:
+                                        isLoading
+                                            ? null
+                                            : () => _navigateToUrl(
+                                              article.prevUrl,
+                                              resetProgress: true,
+                                            ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.chevron_left, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Prev'),
+                                      ],
                                     ),
-                                  if (article.homeUrl != null)
-                                    ElevatedButton.icon(
-                                      onPressed:
-                                          isLoading
-                                              ? null
-                                              : () => _navigateToUrl(
-                                                article.homeUrl,
-                                              ),
-                                      icon: const Icon(Icons.home),
-                                      label: const Text('Home'),
+                                  ),
+                                ElevatedButton.icon(
+                                  onPressed: () async {
+                                    final uri = Uri.parse(article.url);
+                                    await launchUrl(
+                                      uri,
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                  },
+                                  icon: const Icon(Icons.open_in_new, size: 18),
+                                  label: const Text('Website'),
+                                ),
+                                if (article.nextUrl != null)
+                                  ElevatedButton(
+                                    onPressed:
+                                        isLoading
+                                            ? null
+                                            : () => _navigateToUrl(
+                                              article.nextUrl,
+                                              resetProgress: true,
+                                              markCurrentCompleted: true,
+                                            ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text('Next'),
+                                        SizedBox(width: 8),
+                                        Icon(Icons.chevron_right, size: 18),
+                                      ],
                                     ),
-                                  if (article.nextUrl != null)
-                                    ElevatedButton(
-                                      onPressed:
-                                          isLoading
-                                              ? null
-                                              : () => _navigateToUrl(
-                                                article.nextUrl,
-                                                resetProgress: true,
-                                                markCurrentCompleted: true,
-                                              ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text('Next'),
-                                          SizedBox(width: 8),
-                                          Icon(Icons.chevron_right, size: 18),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              ),
+                                  ),
+                              ],
                             ),
+                          ),
                         ],
                       ),
                     ),

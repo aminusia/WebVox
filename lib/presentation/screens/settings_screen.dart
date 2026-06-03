@@ -450,7 +450,7 @@ class _TtsEngineSelector extends ConsumerWidget {
             engines.any((e) => e['name'] == currentEngine) ? currentEngine : '';
 
         return DropdownButtonFormField<String>(
-          value: validEngine,
+          initialValue: validEngine,
           decoration: const InputDecoration(labelText: 'TTS Engine'),
           items: [
             const DropdownMenuItem(value: '', child: Text('System default')),

@@ -473,16 +473,16 @@ class HtmlParser {
       if (!isPrev && !isNext && !isHome) continue;
 
       // Try to find the href from parent anchor element
-      Element? href_parent = button.parent;
+      Element? hrefParent = button.parent;
       String? href;
 
-      while (href_parent != null &&
-          href_parent.localName?.toLowerCase() != 'body') {
-        if (href_parent.localName?.toLowerCase() == 'a') {
-          href = href_parent.attributes['href'];
+      while (hrefParent != null &&
+          hrefParent.localName?.toLowerCase() != 'body') {
+        if (hrefParent.localName?.toLowerCase() == 'a') {
+          href = hrefParent.attributes['href'];
           if (href != null && href.isNotEmpty) break;
         }
-        href_parent = href_parent.parent;
+        hrefParent = hrefParent.parent;
       }
 
       // If no href from parent, try data attributes on the button
