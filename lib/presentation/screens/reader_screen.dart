@@ -51,10 +51,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   /// Key to access [ArticleContentWidgetState.ensureWordVisible].
   final _contentKey = GlobalKey<ArticleContentWidgetState>();
 
+  /// Key to access [_ScrollToTopButtonState.animateOut].
+  final _scrollToTopButtonKey = GlobalKey<_ScrollToTopButtonState>();
+
   // ── Paragraph-tap overlay ─────────────────────────────────────────────────
   int? _overlayParagraphIndex;
   OverlayEntry? _playOverlayEntry;
   GlobalKey<_PlayHereOverlayState>? _playOverlayKey;
+
+  // ── Scroll-to-top button animation state ─────────────────────────────────────
+  bool _scrollToTopAnimatingOut = false;
 
   // ── Init / Dispose ──────────────────────────────────────────────────────────
 
@@ -114,6 +120,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                 : readerState.savedWordOffset,
       ),
     );
+  }
+
+  /// Called by [_ScrollToTopButton] when its out-animation completes.
+  void onScrollToTopButtonAnimatedOut() {
+    setState(() {
+      _scrollToTopAnimatingOut = false;
+    });
   }
 
   // ── App lifecycle (delegated to notifier) ───────────────────────────────────
@@ -448,6 +461,21 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       if (next >= 0) _contentKey.currentState?.ensureWordVisible();
     });
 
+    // ── Animate out scroll-to-top button when hidden ───────────────────────────
+    ref.listen(articleReaderProvider.select((s) => s.showScrollToTop), (
+      prev,
+      next,
+    ) {
+      if (prev == true && next == false) {
+        setState(() {
+          _scrollToTopAnimatingOut = true;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToTopButtonKey.currentState?.animateOut();
+        });
+      }
+    });
+
     // ── Show "auto-continued" snackbar (one-shot) ────────────────────────────
     // ref.listen(articleReaderProvider.select((s) => s.showAutoNextSnackbar), (
     //   _,
@@ -623,13 +651,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                       ),
                                     ),
                                   ElevatedButton.icon(
-                                    onPressed: () async {
-                                      final uri = Uri.parse(article.url);
-                                      await launchUrl(
-                                        uri,
-                                        mode: LaunchMode.externalApplication,
-                                      );
-                                    },
+                                    onPressed:
+                                        isLoading
+                                            ? null
+                                            : () async {
+                                              final uri = Uri.parse(
+                                                article.url,
+                                              );
+                                              await launchUrl(
+                                                uri,
+                                                mode:
+                                                    LaunchMode
+                                                        .externalApplication,
+                                              );
+                                            },
                                     icon: const Icon(
                                       Icons.open_in_new,
                                       size: 18,
@@ -727,13 +762,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                                     ),
                                   ),
                                 ElevatedButton.icon(
-                                  onPressed: () async {
-                                    final uri = Uri.parse(article.url);
-                                    await launchUrl(
-                                      uri,
-                                      mode: LaunchMode.externalApplication,
-                                    );
-                                  },
+                                  onPressed:
+                                      isLoading
+                                          ? null
+                                          : () async {
+                                            final uri = Uri.parse(article.url);
+                                            await launchUrl(
+                                              uri,
+                                              mode:
+                                                  LaunchMode
+                                                      .externalApplication,
+                                            );
+                                          },
                                   icon: const Icon(Icons.open_in_new, size: 18),
                                   label: const Text('Website'),
                                 ),
@@ -781,19 +821,98 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           ],
         ),
         floatingActionButton:
-            showScrollToTop
+            (showScrollToTop || _scrollToTopAnimatingOut)
                 ? Padding(
                   padding: EdgeInsets.only(bottom: showTts ? 50 : 0),
-                  child: Opacity(
-                    opacity: 0.6,
-                    child: FloatingActionButton(
-                      onPressed: _scrollToTop,
-                      tooltip: 'Scroll to top',
-                      child: const Icon(Icons.arrow_upward),
-                    ),
+                  child: _ScrollToTopButton(
+                    key: _scrollToTopButtonKey,
+                    onPressed: _scrollToTop,
                   ),
                 )
                 : null,
+      ),
+    );
+  }
+}
+
+// ── "Scroll to top" animated button ─────────────────────────────────────────────
+
+class _ScrollToTopButton extends StatefulWidget {
+  final VoidCallback onPressed;
+
+  const _ScrollToTopButton({super.key, required this.onPressed});
+
+  @override
+  State<_ScrollToTopButton> createState() => _ScrollToTopButtonState();
+}
+
+class _ScrollToTopButtonState extends State<_ScrollToTopButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+      reverseDuration: const Duration(milliseconds: 180),
+    );
+    // Bouncy scale — elasticOut gives the spring effect on entry.
+    _scale = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
+    // Fade resolves quickly so the button "pops in" then bounces.
+    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.35, curve: Curves.easeIn),
+      ),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void animateOut() {
+    if (!mounted) return;
+    _controller.reverse().then((_) {
+      if (mounted) {
+        // Notify parent to remove the button after animation
+        context
+            .findAncestorStateOfType<_ReaderScreenState>()
+            ?.onScrollToTopButtonAnimatedOut();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder:
+          (_, child) => Opacity(
+            opacity: _opacity.value,
+            child: ScaleTransition(
+              scale: _scale,
+              alignment: Alignment.bottomCenter,
+              child: child,
+            ),
+          ),
+      child: Opacity(
+        opacity: 0.6,
+        child: FloatingActionButton(
+          onPressed: widget.onPressed,
+          tooltip: 'Scroll to top',
+          child: const Icon(Icons.arrow_upward),
+        ),
       ),
     );
   }
