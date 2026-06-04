@@ -17,6 +17,12 @@ class TtsControlBar extends ConsumerWidget {
   /// that calls this callback (used on the home screen to navigate to reader).
   final VoidCallback? onNavigateToReader;
 
+  /// Optional GlobalKeys for tutorial targeting — applied to the voice button
+  /// and the play/read button respectively so the tutorial overlay can find
+  /// their positions.
+  final GlobalKey? voiceButtonKey;
+  final GlobalKey? readButtonKey;
+
   const TtsControlBar({
     super.key,
     required this.paragraphs,
@@ -26,6 +32,8 @@ class TtsControlBar extends ConsumerWidget {
     this.startWordOffset = 0,
     this.onParagraphChanged,
     this.onNavigateToReader,
+    this.voiceButtonKey,
+    this.readButtonKey,
   });
 
   @override
@@ -102,6 +110,7 @@ class TtsControlBar extends ConsumerWidget {
                         data: (voices) {
                           if (voices.isEmpty) return const SizedBox.shrink();
                           return _VoiceButton(
+                            key: voiceButtonKey,
                             voices: voices,
                             currentVoice: ttsState.voiceName,
                             language: articleLanguage,
@@ -162,6 +171,7 @@ class TtsControlBar extends ConsumerWidget {
                           builder: (context) {
                             if (!ttsState.isActive) {
                               return FilledButton.icon(
+                                key: readButtonKey,
                                 icon: const Icon(
                                   Icons.play_arrow_rounded,
                                   size: 18,
@@ -275,6 +285,7 @@ class _VoiceButton extends ConsumerWidget {
   final String language;
 
   const _VoiceButton({
+    super.key,
     required this.voices,
     required this.currentVoice,
     required this.language,

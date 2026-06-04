@@ -24,6 +24,10 @@ class AppConstants {
   static const String prefCachingEnabled = 'caching_enabled';
   static const String prefCacheInBackground = 'cache_in_background';
 
+  // Tutorial prefs
+  static const String prefReaderTutorialCompleted =
+      'reader_screen_tutorial_completed';
+
   static const String defaultTtsLanguage = 'en-US';
   static const double defaultTtsSpeed = 0.5;
   static const double defaultFontSize = 18.0;

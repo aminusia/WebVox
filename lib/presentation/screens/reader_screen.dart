@@ -11,6 +11,7 @@ import 'package:webvox/presentation/providers/article_reader_notifier.dart';
 import 'package:webvox/presentation/providers/providers.dart';
 import 'package:webvox/presentation/providers/tts_notifier.dart';
 import 'package:webvox/presentation/widgets/article_content_widget.dart';
+import 'package:webvox/presentation/widgets/reader_tutorial_overlay.dart';
 import 'package:webvox/presentation/widgets/tts_control_bar.dart';
 
 class ReaderScreen extends ConsumerStatefulWidget {
@@ -62,6 +63,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   // ── Scroll-to-top button animation state ─────────────────────────────────────
   bool _scrollToTopAnimatingOut = false;
 
+  // ── Tutorial ─────────────────────────────────────────────────────────────────
+  /// GlobalKeys for the tutorial balloon targets.
+  final _bookmarkKey = GlobalKey();
+  final _ttsToggleKey = GlobalKey();
+  final _voiceKey = GlobalKey();
+  final _readKey = GlobalKey();
+
+  ReaderTutorialController? _tutorialController;
+
   // ── Init / Dispose ──────────────────────────────────────────────────────────
 
   @override
@@ -85,12 +95,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
       ref
           .read(articleReaderProvider.notifier)
           .initWithArticle(article, resetProgress: widget.resetProgress);
+
+      // Start tutorial if first time.
+      _startTutorialIfFirstTime();
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tutorialController?.cancelIfRunning();
     _bestEffortSaveOnDispose();
     _playOverlayEntry?.remove();
     _playOverlayEntry = null;
@@ -127,6 +141,47 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     setState(() {
       _scrollToTopAnimatingOut = false;
     });
+  }
+
+  // ── Tutorial helpers ────────────────────────────────────────────────────────
+
+  void _startTutorialIfFirstTime() {
+    if (!mounted) return;
+    _tutorialController = ReaderTutorialController(
+      context: context,
+      onShowOverlay: (entry) {
+        if (mounted) Overlay.of(context).insert(entry);
+      },
+      onRemoveOverlay: () {},
+      getTargetBox: _getTutorialTargetBox,
+      onOpenTtsBar: () async {
+        final currentShowTts = ref.read(articleReaderProvider).showTts;
+        if (!currentShowTts) {
+          ref.read(articleReaderProvider.notifier).setShowTts(true);
+          // Wait for the TTS bar to appear.
+          await Future.delayed(const Duration(milliseconds: 350));
+        }
+      },
+      isTtsBarOpen: () => ref.read(articleReaderProvider).showTts,
+    );
+    _tutorialController!.checkShouldShow();
+  }
+
+  RenderBox? _getTutorialTargetBox(ReaderTutorialStep step) {
+    late final GlobalKey key;
+    switch (step) {
+      case ReaderTutorialStep.bookmark:
+        key = _bookmarkKey;
+      case ReaderTutorialStep.toggleTtsBar:
+        key = _ttsToggleKey;
+      case ReaderTutorialStep.voiceSelection:
+        key = _voiceKey;
+      case ReaderTutorialStep.readArticle:
+        key = _readKey;
+    }
+    final ctx = key.currentContext;
+    if (ctx == null) return null;
+    return ctx.findRenderObject() as RenderBox?;
   }
 
   // ── App lifecycle (delegated to notifier) ───────────────────────────────────
@@ -571,6 +626,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
           ),
           actions: [
             IconButton(
+              key: _bookmarkKey,
               icon: Icon(
                 isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                 color: isBookmarked ? AppColors.titleColor : AppColors.onBar,
@@ -581,6 +637,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                       ref.read(articleReaderProvider.notifier).toggleBookmark(),
             ),
             IconButton(
+              key: _ttsToggleKey,
               icon: Icon(
                 showTts
                     ? Icons.record_voice_over
@@ -690,6 +747,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                     ref
                         .read(articleReaderProvider.notifier)
                         .setHighlightedIndex,
+                voiceButtonKey: _voiceKey,
+                readButtonKey: _readKey,
               ),
           ],
         ),
