@@ -566,27 +566,51 @@
 
     /* ─── BADGES ──────────────────────────────────────────── */
     #badges {
-      padding: 80px 6%;
+      padding: 80px 0;
       text-align: center;
+      overflow: hidden;
     }
     .badges-inner {
-      max-width: 600px;
       margin: 0 auto;
+      padding: 0 6%;
     }
     .badges-inner .section-sub {
       margin: 0 auto 40px;
     }
+    .badges-marquee {
+      overflow: hidden;
+      mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+      margin: 0 auto;
+      padding: 16px 0;
+    }
+    .badges-track {
+      display: flex;
+      gap: 40px;
+      width: max-content;
+      animation: badge-scroll 40s linear infinite;
+    }
+    .badges-marquee:hover .badges-track {
+      animation-play-state: paused;
+    }
     .badge-link {
-      display: inline-block;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
       transition: transform 0.3s ease, filter 0.3s ease;
     }
     .badge-link:hover {
-      transform: translateY(-3px) scale(1.03);
-      filter: drop-shadow(0 8px 24px rgba(91, 94, 244, 0.25));
+      transform: translateY(-3px) scale(1.05);
+      filter: drop-shadow(0 8px 24px rgba(91, 94, 244, 0.35));
     }
     .badge-link img {
       display: block;
-      margin: 0 auto;
+      height: 58px;
+      width: auto;
+    }
+    @keyframes badge-scroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
     }
 
     /* ─── FOOTER ────────────────────────────────────────── */
@@ -1103,13 +1127,46 @@
 <section id="badges">
   <div class="badges-inner">
     <span class="section-label">Recognized by</span>
-    <h2 class="section-title gradient-text">Featured on</h2>
-    <a href="https://earlyhunt.com/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
-      <img src="https://earlyhunt.com/badges/earlyhunt-badge-dark.svg" alt="Featured on EarlyHunt" width="265" height="58" />
-    </a>
-    <a href="https://auraplusplus.com/projects/webvox-distraction-free-web-reading-listening" target="_blank" rel="noopener">
-      <img src="https://auraplusplus.com/images/badges/featured-on-dark.svg" alt="Featured on Aura++" width="265" height="58" />
-    </a>
+  </div>
+  <div class="badges-marquee">
+    <div class="badges-track">
+      <a href="https://earlyhunt.com/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://earlyhunt.com/badges/earlyhunt-badge-dark.svg" alt="Featured on EarlyHunt" />
+      </a>
+      <a href="https://auraplusplus.com/projects/webvox-distraction-free-web-reading-listening" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://auraplusplus.com/images/badges/featured-on-dark.svg" alt="Featured on Aura++" />
+      </a>
+      <a href="https://uno.directory" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://uno.directory/uno-directory.svg" alt="Listed on Uno Directory" />
+      </a>
+      <a href="https://sidehunt.io/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://sidehunt.io/badges/sidehunt-badge-dark.svg" alt="Featured on Sidehunt" />
+      </a>
+      <a href="https://makerhunt.io/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://makerhunt.io/badges/makerhunt-badge-dark.svg" alt="Featured on MakerHunt" />
+      </a>
+      <a href="https://indiehunt.io/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://indiehunt.io/badges/indiehunt-badge-dark.svg" alt="Featured on IndieHunt" />
+      </a>
+      <a href="https://earlyhunt.com/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://earlyhunt.com/badges/earlyhunt-badge-dark.svg" alt="Featured on EarlyHunt" />
+      </a>
+      <a href="https://auraplusplus.com/projects/webvox-distraction-free-web-reading-listening" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://auraplusplus.com/images/badges/featured-on-dark.svg" alt="Featured on Aura++" />
+      </a>
+      <a href="https://uno.directory" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://uno.directory/uno-directory.svg" alt="Listed on Uno Directory" />
+      </a>
+      <a href="https://sidehunt.io/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://sidehunt.io/badges/sidehunt-badge-dark.svg" alt="Featured on Sidehunt" />
+      </a>
+      <a href="https://makerhunt.io/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://makerhunt.io/badges/makerhunt-badge-dark.svg" alt="Featured on MakerHunt" />
+      </a>
+      <a href="https://indiehunt.io/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+        <img src="https://indiehunt.io/badges/indiehunt-badge-dark.svg" alt="Featured on IndieHunt" />
+      </a>
+    </div>
   </div>
 </section>
 
