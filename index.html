@@ -564,6 +564,31 @@
     .gplay-btn-text { text-align: left; line-height: 1.2; }
     .gplay-btn-text small { display: block; font-size: 0.72rem; font-weight: 500; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
 
+    /* ─── BADGES ──────────────────────────────────────────── */
+    #badges {
+      padding: 80px 6%;
+      text-align: center;
+    }
+    .badges-inner {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .badges-inner .section-sub {
+      margin: 0 auto 40px;
+    }
+    .badge-link {
+      display: inline-block;
+      transition: transform 0.3s ease, filter 0.3s ease;
+    }
+    .badge-link:hover {
+      transform: translateY(-3px) scale(1.03);
+      filter: drop-shadow(0 8px 24px rgba(91, 94, 244, 0.25));
+    }
+    .badge-link img {
+      display: block;
+      margin: 0 auto;
+    }
+
     /* ─── FOOTER ────────────────────────────────────────── */
     footer {
       border-top: 1px solid var(--border);
@@ -1070,6 +1095,17 @@
         <small>Get it on</small>
         Google Play
       </div>
+    </a>
+  </div>
+</section>
+
+<!-- ─── BADGES ──────────────────────────────────────────── -->
+<section id="badges">
+  <div class="badges-inner">
+    <span class="section-label">Recognized by</span>
+    <h2 class="section-title gradient-text">Featured on</h2>
+    <a href="https://earlyhunt.com/project/webvox-listen-to-any-web-article" target="_blank" rel="noopener" class="badge-link">
+      <img src="https://earlyhunt.com/badges/earlyhunt-badge-dark.svg" alt="Featured on EarlyHunt" width="265" height="58" />
     </a>
   </div>
 </section>
