@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show ClearSelectionEvent, SelectionHandler;
 import 'package:webvox/domain/entities/settings.dart';
 
 /// Resolved Flutter-level highlight style, converted from [Settings] fields.
@@ -159,148 +161,163 @@ class ArticleContentWidgetState extends State<ArticleContentWidget> {
     final tt = Theme.of(context).textTheme;
 
     return SelectionArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: List.generate(widget.paragraphs.length, (i) {
-          final raw = widget.paragraphs[i];
-          final isHeading = raw.startsWith('## ');
-          final isHighlighted = i == widget.highlightedIndex;
-          final displayText = isHeading ? raw.substring(3) : raw;
+      child: Builder(
+        builder: (context) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: List.generate(widget.paragraphs.length, (i) {
+              final raw = widget.paragraphs[i];
+              final isHeading = raw.startsWith('## ');
+              final isHighlighted = i == widget.highlightedIndex;
+              final displayText = isHeading ? raw.substring(3) : raw;
 
-          final headingStyle = tt.titleMedium?.copyWith(
-            fontSize: widget.fontSize + 2,
-            fontWeight: FontWeight.bold,
-            color: isHighlighted ? widget.paragraphHighlightStyle.color : null,
-            backgroundColor:
-                isHighlighted
-                    ? widget.paragraphHighlightStyle.backgroundColor
-                    : null,
-            decoration:
-                isHighlighted
-                    ? widget.paragraphHighlightStyle.decoration
-                    : null,
-            decorationColor:
-                isHighlighted ? widget.paragraphHighlightStyle.color : null,
-          );
-          final bodyStyle = tt.bodyLarge?.copyWith(
-            fontSize: widget.fontSize,
-            height: 1.7,
-            color: isHighlighted ? widget.paragraphHighlightStyle.color : null,
-            backgroundColor:
-                isHighlighted
-                    ? widget.paragraphHighlightStyle.backgroundColor
-                    : null,
-            decoration:
-                isHighlighted
-                    ? widget.paragraphHighlightStyle.decoration
-                    : null,
-            decorationColor:
-                isHighlighted ? widget.paragraphHighlightStyle.color : null,
-          );
+              final headingStyle = tt.titleMedium?.copyWith(
+                fontSize: widget.fontSize + 2,
+                fontWeight: FontWeight.bold,
+                color: isHighlighted ? widget.paragraphHighlightStyle.color : null,
+                backgroundColor:
+                    isHighlighted
+                        ? widget.paragraphHighlightStyle.backgroundColor
+                        : null,
+                decoration:
+                    isHighlighted
+                        ? widget.paragraphHighlightStyle.decoration
+                        : null,
+                decorationColor:
+                    isHighlighted ? widget.paragraphHighlightStyle.color : null,
+              );
+              final bodyStyle = tt.bodyLarge?.copyWith(
+                fontSize: widget.fontSize,
+                height: 1.7,
+                color: isHighlighted ? widget.paragraphHighlightStyle.color : null,
+                backgroundColor:
+                    isHighlighted
+                        ? widget.paragraphHighlightStyle.backgroundColor
+                        : null,
+                decoration:
+                    isHighlighted
+                        ? widget.paragraphHighlightStyle.decoration
+                        : null,
+                decorationColor:
+                    isHighlighted ? widget.paragraphHighlightStyle.color : null,
+              );
 
-          // Build the text content (with optional word highlight)
-          Widget textWidget;
-          if (isHighlighted &&
-              !isHeading &&
-              widget.wordStart >= 0 &&
-              widget.wordEnd > widget.wordStart &&
-              widget.wordEnd <= displayText.length) {
-            final safeStart = widget.wordStart.clamp(0, displayText.length);
-            final safeEnd = widget.wordEnd.clamp(safeStart, displayText.length);
-            final wordStyle = widget.wordHighlightStyle;
+              // Build the text content (with optional word highlight)
+              Widget textWidget;
+              if (isHighlighted &&
+                  !isHeading &&
+                  widget.wordStart >= 0 &&
+                  widget.wordEnd > widget.wordStart &&
+                  widget.wordEnd <= displayText.length) {
+                final safeStart = widget.wordStart.clamp(0, displayText.length);
+                final safeEnd = widget.wordEnd.clamp(safeStart, displayText.length);
+                final wordStyle = widget.wordHighlightStyle;
 
-            // Split the paragraph into sections so the active word can always
-            // be scrolled into view via [ensureWordVisible], even when the
-            // paragraph is taller than the viewport.
-            final sections = _computeSections(displayText);
-            final wordSectionIdx = sections.indexWhere(
-              (s) => safeStart >= s.$1 && safeStart < s.$2,
-            );
+                // Split the paragraph into sections so the active word can always
+                // be scrolled into view via [ensureWordVisible], even when the
+                // paragraph is taller than the viewport.
+                final sections = _computeSections(displayText);
+                final wordSectionIdx = sections.indexWhere(
+                  (s) => safeStart >= s.$1 && safeStart < s.$2,
+                );
 
-            if (wordSectionIdx >= 0) {
-              textWidget = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: List.generate(sections.length, (sIdx) {
-                  final (sStart, sEnd) = sections[sIdx];
-                  final sText = displayText.substring(sStart, sEnd);
-                  final isWordSection = sIdx == wordSectionIdx;
+                if (wordSectionIdx >= 0) {
+                  textWidget = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: List.generate(sections.length, (sIdx) {
+                      final (sStart, sEnd) = sections[sIdx];
+                      final sText = displayText.substring(sStart, sEnd);
+                      final isWordSection = sIdx == wordSectionIdx;
 
-                  Widget tw;
-                  if (isWordSection) {
-                    final ls = (safeStart - sStart).clamp(0, sText.length);
-                    final le = (safeEnd - sStart).clamp(ls, sText.length);
-                    tw = Text.rich(
-                      TextSpan(
-                        style: bodyStyle,
-                        children: [
-                          if (ls > 0) TextSpan(text: sText.substring(0, ls)),
+                      Widget tw;
+                      if (isWordSection) {
+                        final ls = (safeStart - sStart).clamp(0, sText.length);
+                        final le = (safeEnd - sStart).clamp(ls, sText.length);
+                        tw = Text.rich(
                           TextSpan(
-                            text: sText.substring(ls, le),
-                            style: bodyStyle?.copyWith(
-                              color: wordStyle.color,
-                              backgroundColor: wordStyle.backgroundColor,
-                              decoration: wordStyle.decoration,
-                              decorationColor: wordStyle.color,
-                            ),
+                            style: bodyStyle,
+                            children: [
+                              if (ls > 0) TextSpan(text: sText.substring(0, ls)),
+                              TextSpan(
+                                text: sText.substring(ls, le),
+                                style: bodyStyle?.copyWith(
+                                  color: wordStyle.color,
+                                  backgroundColor: wordStyle.backgroundColor,
+                                  decoration: wordStyle.decoration,
+                                  decorationColor: wordStyle.color,
+                                ),
+                              ),
+                              if (le < sText.length)
+                                TextSpan(text: sText.substring(le)),
+                            ],
                           ),
-                          if (le < sText.length)
-                            TextSpan(text: sText.substring(le)),
-                        ],
-                      ),
-                    );
-                  } else {
-                    tw = Text(sText, style: bodyStyle);
-                  }
+                        );
+                      } else {
+                        tw = Text(sText, style: bodyStyle);
+                      }
 
-                  return isWordSection
-                      ? KeyedSubtree(key: _wordSectionKey, child: tw)
-                      : tw;
-                }),
-              );
-            } else {
-              // Fallback: render as a single rich text (original behaviour).
-              textWidget = Text.rich(
-                TextSpan(
-                  style: bodyStyle,
-                  children: [
-                    TextSpan(text: displayText.substring(0, safeStart)),
+                      return isWordSection
+                          ? KeyedSubtree(key: _wordSectionKey, child: tw)
+                          : tw;
+                    }),
+                  );
+                } else {
+                  // Fallback: render as a single rich text (original behaviour).
+                  textWidget = Text.rich(
                     TextSpan(
-                      text: displayText.substring(safeStart, safeEnd),
-                      style: bodyStyle?.copyWith(
-                        color: wordStyle.color,
-                        backgroundColor: wordStyle.backgroundColor,
-                        decoration: wordStyle.decoration,
-                        decorationColor: wordStyle.color,
-                      ),
+                      style: bodyStyle,
+                      children: [
+                        TextSpan(text: displayText.substring(0, safeStart)),
+                        TextSpan(
+                          text: displayText.substring(safeStart, safeEnd),
+                          style: bodyStyle?.copyWith(
+                            color: wordStyle.color,
+                            backgroundColor: wordStyle.backgroundColor,
+                            decoration: wordStyle.decoration,
+                            decorationColor: wordStyle.color,
+                          ),
+                        ),
+                        TextSpan(text: displayText.substring(safeEnd)),
+                      ],
                     ),
-                    TextSpan(text: displayText.substring(safeEnd)),
-                  ],
-                ),
+                  );
+                }
+              } else {
+                textWidget = Text(
+                  displayText,
+                  style: isHeading ? headingStyle : bodyStyle,
+                );
+              }
+
+              Widget containerChild = GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  final handler = SelectionContainer.maybeOf(context) as SelectionHandler?;
+                  debugPrint('onTap: handler=$handler, hasSelection=${handler?.value.hasSelection}');
+                  if (handler != null && handler.value.hasSelection) {
+                    handler.dispatchSelectionEvent(const ClearSelectionEvent());
+                    debugPrint('onTap: cleared selection, not calling parent onTap');
+                    return;
+                  }
+                  if (widget.onTap != null) {
+                    widget.onTap!(i);
+                  }
+                },
+                child: textWidget,
               );
-            }
-          } else {
-            textWidget = Text(
-              displayText,
-              style: isHeading ? headingStyle : bodyStyle,
-            );
-          }
 
-          Widget containerChild = GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onTap == null ? null : () => widget.onTap!(i),
-            child: textWidget,
+              return Padding(
+                key:
+                    (widget.paragraphKeys != null &&
+                            i < widget.paragraphKeys!.length)
+                        ? widget.paragraphKeys![i]
+                        : null,
+                padding: EdgeInsets.only(bottom: isHeading ? 4 : 14),
+                child: containerChild,
+              );
+            }),
           );
-
-          return Padding(
-            key:
-                (widget.paragraphKeys != null &&
-                        i < widget.paragraphKeys!.length)
-                    ? widget.paragraphKeys![i]
-                    : null,
-            padding: EdgeInsets.only(bottom: isHeading ? 4 : 14),
-            child: containerChild,
-          );
-        }),
+        },
       ),
     );
   }
