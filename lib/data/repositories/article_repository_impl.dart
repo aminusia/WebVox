@@ -118,7 +118,7 @@ class ArticleRepositoryImpl implements ArticleRepository {
   }
 
   @override
-  Future<int> clearCachedArticles() => _local.deleteNonBookmarked();
+  Future<int> clearCachedArticles() => _local.clearCachedArticles();
 
   @override
   Future<List<Article>> getAllCached() => _local.getAll();

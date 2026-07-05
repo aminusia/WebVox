@@ -244,14 +244,26 @@ class LocalArticleSource {
   }
 
   /// Delete all non-bookmarked articles. Returns the number of rows deleted.
+  /// Only deletes from articles table (cache). Does NOT touch read_history or bookmarks.
   Future<int> deleteNonBookmarked() async {
     final db = await _db;
     final count = await db.rawDelete(
       'DELETE FROM articles WHERE id NOT IN (SELECT article_id FROM bookmarks)',
     );
+    // Clean up orphaned reading_states for deleted articles
     await db.rawDelete(
-      'DELETE FROM read_history WHERE article_id NOT IN (SELECT id FROM articles)',
+      'DELETE FROM reading_states WHERE article_id NOT IN (SELECT id FROM articles)',
     );
+    return count;
+  }
+
+  /// Clear all cached articles (from articles table only).
+  /// Does NOT touch read_history (recent list) or bookmarks.
+  /// Returns the number of rows deleted.
+  Future<int> clearCachedArticles() async {
+    final db = await _db;
+    final count = await db.rawDelete('DELETE FROM articles');
+    // Clean up orphaned reading_states
     await db.rawDelete(
       'DELETE FROM reading_states WHERE article_id NOT IN (SELECT id FROM articles)',
     );
@@ -368,26 +380,90 @@ class LocalArticleSource {
   }
 
   /// Remove all read_history rows for articles belonging to [titleId].
-  Future<void> removeHistoryForTitle(String titleId) async {
-    final db = await _db;
-    await db.rawDelete(
-      '''
-      DELETE FROM read_history
-      WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)
-    ''',
-      [titleId],
-    );
-  }
+    /// Also removes the articles from cache if they're not bookmarked.
+    Future<void> removeHistoryForTitle(String titleId) async {
+      final db = await _db;
+    
+      // First, get all article IDs for this title
+      final articleRows = await db.query(
+        'articles',
+        columns: ['id'],
+        where: 'title_id = ?',
+        whereArgs: [titleId],
+      );
+      final articleIds = articleRows.map((r) => r['id'] as String).toList();
+    
+      // Delete from read_history
+      await db.rawDelete(
+        '''
+        DELETE FROM read_history
+        WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)
+        ''',
+        [titleId],
+      );
+    
+      // Delete articles from cache if they're not bookmarked
+      if (articleIds.isNotEmpty) {
+        await db.rawDelete(
+          '''
+          DELETE FROM articles
+          WHERE title_id = ? 
+          AND id NOT IN (SELECT article_id FROM bookmarks)
+          ''',
+          [titleId],
+        );
+      }
+    
+      // Clean up orphaned reading_states
+      if (articleIds.isNotEmpty) {
+        await db.rawDelete(
+          'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)',
+          [titleId],
+        );
+      }
+    }
 
-  /// Remove all bookmark rows for articles belonging to [titleId].
-  Future<void> removeBookmarksForTitle(String titleId) async {
-    final db = await _db;
-    await db.rawDelete(
-      '''
-      DELETE FROM bookmarks
-      WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)
-    ''',
-      [titleId],
-    );
-  }
+    /// Remove all bookmark rows for articles belonging to [titleId].
+    /// Also removes the articles from cache if they're not in read history.
+    Future<void> removeBookmarksForTitle(String titleId) async {
+      final db = await _db;
+    
+      // First, get all article IDs for this title
+      final articleRows = await db.query(
+        'articles',
+        columns: ['id'],
+        where: 'title_id = ?',
+        whereArgs: [titleId],
+      );
+      final articleIds = articleRows.map((r) => r['id'] as String).toList();
+    
+      // Delete from bookmarks
+      await db.rawDelete(
+        '''
+        DELETE FROM bookmarks
+        WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)
+        ''',
+        [titleId],
+      );
+    
+      // Delete articles from cache if they're not in read history
+      if (articleIds.isNotEmpty) {
+        await db.rawDelete(
+          '''
+          DELETE FROM articles
+          WHERE title_id = ? 
+          AND id NOT IN (SELECT article_id FROM read_history)
+          ''',
+          [titleId],
+        );
+      }
+    
+      // Clean up orphaned reading_states
+      if (articleIds.isNotEmpty) {
+        await db.rawDelete(
+          'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)',
+          [titleId],
+        );
+      }
+    }
 }
