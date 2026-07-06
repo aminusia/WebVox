@@ -12,7 +12,6 @@ class RemoteArticleSource {
       'AppleWebKit/537.36 (KHTML, like Gecko) '
       'Chrome/149.0.0.0 Safari/537.36';
 
-  static const _novelArrowApiBase = 'https://novelarrow.com/api-web';
   static const _novelArrowHeaders = {
     'accept': '*/*',
     'accept-language': 'en-US,en;q=0.9',
@@ -184,13 +183,14 @@ class RemoteArticleSource {
     );
 
     final uri = Uri.parse(url);
+    final domain = uri.host;
     final pathSegments = uri.pathSegments;
     // Extract the novel slug and chapter slug from the URL
-    // URL format: https://novelarrow.com/chapter/<novel-slug>/<chapter-slug>
-    // API format: https://novelarrow.com/api-web/novels/<novel-slug>/chapters/<chapter-slug>
+    // URL format: https://{domain}/chapter/<novel-slug>/<chapter-slug>
+    // API format: https://{domain}/api-web/novels/<novel-slug>/chapters/<chapter-slug>
     if (pathSegments.length < 3 || pathSegments[0] != 'chapter') {
       debugPrint('[APIFetch] ERROR: Invalid chapter URL format: $url');
-      throw Exception('Invalid novelarrow.com chapter URL: $url');
+      throw Exception('Invalid chapter URL: $url');
     }
     final novelSlug = pathSegments[1];
     final chapterSlug = pathSegments[2];
@@ -199,8 +199,7 @@ class RemoteArticleSource {
     );
 
     // Build the API URL
-    final apiUrl =
-        '$_novelArrowApiBase/novels/$novelSlug/chapters/$chapterSlug';
+    final apiUrl = 'https://$domain/api-web/novels/$novelSlug/chapters/$chapterSlug';
     debugPrint('[APIFetch] API URL: $apiUrl');
 
     // Build headers - use the previous chapter's web URL as referer
@@ -263,7 +262,7 @@ class RemoteArticleSource {
         '[APIFetch] Body decoded (first 500 chars): ${body.substring(0, body.length.clamp(0, 500))}',
       );
 
-      // Parse the JSON response from the novelarrow API
+      // Parse the JSON response from the API
       final jsonData = jsonDecode(body) as Map<String, dynamic>;
       debugPrint('[APIFetch] JSON parsed, keys: ${jsonData.keys.join(", ")}');
 

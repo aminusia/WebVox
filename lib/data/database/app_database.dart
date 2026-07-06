@@ -114,24 +114,24 @@ class AppDatabase {
           custom_title TEXT
         )
       ''');
-      // Create volumes table (formerly titles).
+      // Create series table (formerly volumes/titles).
       await db.execute('''
-        CREATE TABLE IF NOT EXISTS volumes (
+        CREATE TABLE IF NOT EXISTS series (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           website_id TEXT NOT NULL,
           created_at INTEGER NOT NULL
         )
       ''');
-      // Add volume_id column to articles.
-      await db.execute('ALTER TABLE articles ADD COLUMN volume_id TEXT');
+      // Add series_id column to articles.
+      await db.execute('ALTER TABLE articles ADD COLUMN series_id TEXT');
 
-      // Migrate existing articles → derive website + volume records.
+      // Migrate existing articles → derive website + series records.
       const uuid = Uuid();
       final articles = await db.query('articles');
       final Map<String, String> domainToWebsiteId = {};
-      // key = "websiteId\x00volumeName" → volumeId
-      final Map<String, String> volumeKeyToId = {};
+      // key = "websiteId\x00seriesName" → seriesId
+      final Map<String, String> seriesKeyToId = {};
 
       for (final row in articles) {
         final url = row['url'] as String? ?? '';
@@ -155,35 +155,35 @@ class AppDatabase {
           domainToWebsiteId[domain] = websiteId;
         }
 
-        // Find or create volume.
-        final volumeKey = '$websiteId\x00$bookTitle';
-        String volumeId;
-        if (volumeKeyToId.containsKey(volumeKey)) {
-          volumeId = volumeKeyToId[volumeKey]!;
+        // Find or create series.
+        final seriesKey = '$websiteId\x00$bookTitle';
+        String seriesId;
+        if (seriesKeyToId.containsKey(seriesKey)) {
+          seriesId = seriesKeyToId[seriesKey]!;
         } else {
-          volumeId = uuid.v4();
-          await db.insert('volumes', {
-            'id': volumeId,
+          seriesId = uuid.v4();
+          await db.insert('series', {
+            'id': seriesId,
             'name': bookTitle,
             'website_id': websiteId,
             'created_at': createdAt,
           });
-          volumeKeyToId[volumeKey] = volumeId;
+          seriesKeyToId[seriesKey] = seriesId;
         }
 
-        // Link article to volume.
+        // Link article to series.
         await db.update(
           'articles',
-          {'volume_id': volumeId},
+          {'series_id': seriesId},
           where: 'id = ?',
           whereArgs: [articleId],
         );
       }
     }
     if (oldVersion < 8) {
-      // Add display_name to volumes: user-editable label separate from the
+      // Add display_name to series: user-editable label separate from the
       // original name (which is used for matching new articles to groups).
-      await db.execute('ALTER TABLE volumes ADD COLUMN display_name TEXT');
+      await db.execute('ALTER TABLE series ADD COLUMN display_name TEXT');
     }
     if (oldVersion < 9) {
       await db.execute('''
@@ -202,8 +202,8 @@ class AppDatabase {
       // Check if titles table exists and rename it
       final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='titles'");
       if (tables.isNotEmpty) {
-        await db.execute('ALTER TABLE titles RENAME TO volumes');
-        // Also rename title_id column in articles to volume_id
+        await db.execute('ALTER TABLE titles RENAME TO series');
+        // Also rename title_id column in articles to series_id
         // SQLite doesn't support column rename directly, so we need to rebuild
         await db.execute('''
           CREATE TABLE articles_new (
@@ -218,13 +218,13 @@ class AppDatabase {
             prev_url TEXT,
             next_url TEXT,
             home_url TEXT,
-            volume_id TEXT
+            series_id TEXT
           )
         ''');
         await db.rawInsert('''
           INSERT INTO articles_new
             (id, url, title, content, author, language,
-             estimated_read_time, created_at, prev_url, next_url, home_url, volume_id)
+             estimated_read_time, created_at, prev_url, next_url, home_url, series_id)
           SELECT
             id, url, title, content, author, language,
             estimated_read_time, created_at, prev_url, next_url, home_url, title_id
@@ -246,7 +246,7 @@ class AppDatabase {
     ''');
 
     await db.execute('''
-      CREATE TABLE volumes (
+      CREATE TABLE series (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         display_name TEXT,
@@ -268,7 +268,7 @@ class AppDatabase {
         prev_url TEXT,
         next_url TEXT,
         home_url TEXT,
-        volume_id TEXT
+        series_id TEXT
       )
     ''');
 
