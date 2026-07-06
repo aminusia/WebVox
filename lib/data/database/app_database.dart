@@ -114,24 +114,24 @@ class AppDatabase {
           custom_title TEXT
         )
       ''');
-      // Create titles table.
+      // Create volumes table (formerly titles).
       await db.execute('''
-        CREATE TABLE IF NOT EXISTS titles (
+        CREATE TABLE IF NOT EXISTS volumes (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           website_id TEXT NOT NULL,
           created_at INTEGER NOT NULL
         )
       ''');
-      // Add title_id column to articles.
-      await db.execute('ALTER TABLE articles ADD COLUMN title_id TEXT');
+      // Add volume_id column to articles.
+      await db.execute('ALTER TABLE articles ADD COLUMN volume_id TEXT');
 
-      // Migrate existing articles → derive website + title records.
+      // Migrate existing articles → derive website + volume records.
       const uuid = Uuid();
       final articles = await db.query('articles');
       final Map<String, String> domainToWebsiteId = {};
-      // key = "websiteId\x00titleName" → titleId
-      final Map<String, String> titleKeyToId = {};
+      // key = "websiteId\x00volumeName" → volumeId
+      final Map<String, String> volumeKeyToId = {};
 
       for (final row in articles) {
         final url = row['url'] as String? ?? '';
@@ -155,35 +155,35 @@ class AppDatabase {
           domainToWebsiteId[domain] = websiteId;
         }
 
-        // Find or create title.
-        final titleKey = '$websiteId\x00$bookTitle';
-        String titleId;
-        if (titleKeyToId.containsKey(titleKey)) {
-          titleId = titleKeyToId[titleKey]!;
+        // Find or create volume.
+        final volumeKey = '$websiteId\x00$bookTitle';
+        String volumeId;
+        if (volumeKeyToId.containsKey(volumeKey)) {
+          volumeId = volumeKeyToId[volumeKey]!;
         } else {
-          titleId = uuid.v4();
-          await db.insert('titles', {
-            'id': titleId,
+          volumeId = uuid.v4();
+          await db.insert('volumes', {
+            'id': volumeId,
             'name': bookTitle,
             'website_id': websiteId,
             'created_at': createdAt,
           });
-          titleKeyToId[titleKey] = titleId;
+          volumeKeyToId[volumeKey] = volumeId;
         }
 
-        // Link article to title.
+        // Link article to volume.
         await db.update(
           'articles',
-          {'title_id': titleId},
+          {'volume_id': volumeId},
           where: 'id = ?',
           whereArgs: [articleId],
         );
       }
     }
     if (oldVersion < 8) {
-      // Add display_name to titles: user-editable label separate from the
+      // Add display_name to volumes: user-editable label separate from the
       // original name (which is used for matching new articles to groups).
-      await db.execute('ALTER TABLE titles ADD COLUMN display_name TEXT');
+      await db.execute('ALTER TABLE volumes ADD COLUMN display_name TEXT');
     }
     if (oldVersion < 9) {
       await db.execute('''
@@ -197,6 +197,43 @@ class AppDatabase {
         )
       ''');
     }
+    if (oldVersion < 10) {
+      // Migration from titles -> volumes table rename
+      // Check if titles table exists and rename it
+      final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='titles'");
+      if (tables.isNotEmpty) {
+        await db.execute('ALTER TABLE titles RENAME TO volumes');
+        // Also rename title_id column in articles to volume_id
+        // SQLite doesn't support column rename directly, so we need to rebuild
+        await db.execute('''
+          CREATE TABLE articles_new (
+            id TEXT PRIMARY KEY,
+            url TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            author TEXT,
+            language TEXT NOT NULL DEFAULT 'en-US',
+            estimated_read_time INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            prev_url TEXT,
+            next_url TEXT,
+            home_url TEXT,
+            volume_id TEXT
+          )
+        ''');
+        await db.rawInsert('''
+          INSERT INTO articles_new
+            (id, url, title, content, author, language,
+             estimated_read_time, created_at, prev_url, next_url, home_url, volume_id)
+          SELECT
+            id, url, title, content, author, language,
+            estimated_read_time, created_at, prev_url, next_url, home_url, title_id
+          FROM articles
+        ''');
+        await db.execute('DROP TABLE articles');
+        await db.execute('ALTER TABLE articles_new RENAME TO articles');
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -209,7 +246,7 @@ class AppDatabase {
     ''');
 
     await db.execute('''
-      CREATE TABLE titles (
+      CREATE TABLE volumes (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         display_name TEXT,
@@ -231,7 +268,7 @@ class AppDatabase {
         prev_url TEXT,
         next_url TEXT,
         home_url TEXT,
-        title_id TEXT
+        volume_id TEXT
       )
     ''');
 

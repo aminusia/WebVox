@@ -10,6 +10,7 @@ class ParsedArticle {
   final String? prevUrl;
   final String? nextUrl;
   final String? homeUrl;
+  final String? volumeName;
 
   const ParsedArticle({
     required this.title,
@@ -20,6 +21,7 @@ class ParsedArticle {
     this.prevUrl,
     this.nextUrl,
     this.homeUrl,
+    this.volumeName,
   });
 
   String get content => paragraphs.join('\n\n');

@@ -281,15 +281,15 @@ class RemoteArticleSource {
       final chapterNameRaw = chapterInfo['chapter_name'] as String?;
       final chapterName = chapterNameRaw?.split(':').last.trim() ?? 'Chapter';
 
-      // Use novel_name from chapterInfo for the novel/series title (db.titles.name)
-      final novelName = chapterInfo['novel_name'] as String?;
+      // Use novel_name from chapterInfo for the novel/series title (db.volumes.name)
+      final volumeName = chapterInfo['novel_name'] as String?;
 
       final contentHtml =
           (chapterInfo['chapter_content'] as String? ??
               chapterInfo['content'] as String? ??
               '');
       debugPrint(
-        '[APIFetch] Chapter name: $chapterName, Novel name: $novelName, Content HTML length: ${contentHtml.length}',
+        '[APIFetch] Chapter name: $chapterName, Volume name: $volumeName, Content HTML length: ${contentHtml.length}',
       );
 
       // Extract novel ID and chapter ID for building API URLs
@@ -337,6 +337,7 @@ class RemoteArticleSource {
         prevUrl: prevUrl,
         nextUrl: nextUrl,
         homeUrl: 'https://novelarrow.com/novel/$novelSlug',
+        volumeName: volumeName,
       );
 
       if (article.paragraphs.isEmpty) {

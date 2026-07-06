@@ -15,80 +15,77 @@ class LocalArticleSource {
     a.id, a.url, a.title, a.content, a.author, a.language,
     a.estimated_read_time, a.created_at,
     a.prev_url, a.next_url, a.home_url,
+    a.volume_id,
     CASE WHEN b.article_id IS NOT NULL THEN 1 ELSE 0 END AS is_bookmarked
   ''';
 
-  // ─── Title / website resolution ─────────────────────────────────────────
+  // ─── Volume / website resolution ─────────────────────────────────────────
 
-  /// Returns the title_id for the given article URL + title, creating the
-  /// website and/or title record if they don't exist yet.
-  /// If [novelName] is provided, it's used directly as the title name (for series/novel grouping)
-  /// instead of extracting from articleTitle.
-  /// Returns the title_id for the given article URL + title, creating the
-    /// website and/or title record if they don't exist yet.
-    /// If [novelName] is provided (e.g., from novelarrow.com API), it's used as the
-    /// title name instead of extracting from article title.
-    Future<String> _resolveOrCreateTitleId(
-      Database db,
-      String url,
-      String articleTitle, {
-      String? novelName,
-    }) async {
-      final domain = TitleExtractor.extractDomain(url);
-      // Use novelName if provided (e.g., from API), otherwise extract from article title
-      final bookTitle = novelName ?? TitleExtractor.extractBookTitle(articleTitle);
+  /// Returns the volume_id for the given article URL + title, creating the
+  /// website and/or volume record if they don't exist yet.
+  /// If [volumeName] is provided (e.g., from novelarrow.com API), it's used as the
+  /// volume name instead of extracting from article title.
+  Future<String> _resolveOrCreateVolumeId(
+    Database db,
+    String url,
+    String articleTitle, {
+    String? volumeName,
+  }) async {
+    final domain = TitleExtractor.extractDomain(url);
+    // Use volumeName if provided (e.g., from API), otherwise extract from article title
+    final vName = volumeName ?? TitleExtractor.extractBookTitle(articleTitle);
 
-      // Find or create website row.
-      final wsRows = await db.query(
-        'websites',
-        columns: ['id'],
-        where: 'domain = ?',
-        whereArgs: [domain],
-        limit: 1,
-      );
-      final String websiteId;
-      if (wsRows.isNotEmpty) {
-        websiteId = wsRows.first['id'] as String;
-      } else {
-        websiteId = _uuid.v4();
-        await db.insert('websites', {
-          'id': websiteId,
-          'domain': domain,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
-      }
-
-      // Find or create title row.
-      final tRows = await db.query(
-        'titles',
-        columns: ['id'],
-        where: 'name = ? AND website_id = ?',
-        whereArgs: [bookTitle, websiteId],
-        limit: 1,
-      );
-      if (tRows.isNotEmpty) {
-        return tRows.first['id'] as String;
-      }
-      final titleId = _uuid.v4();
-      await db.insert('titles', {
-        'id': titleId,
-        'name': bookTitle,
-        'website_id': websiteId,
-        'created_at': DateTime.now().millisecondsSinceEpoch,
-      });
-      return titleId;
+    // Find or create website row.
+    final wsRows = await db.query(
+      'websites',
+      columns: ['id'],
+      where: 'domain = ?',
+      whereArgs: [domain],
+      limit: 1,
+    );
+    final String websiteId;
+    if (wsRows.isNotEmpty) {
+      websiteId = wsRows.first['id'] as String;
+    } else {
+      websiteId = _uuid.v4();
+      await db.insert('websites', {
+        'id': websiteId,
+        'domain': domain,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
+
+    // Find or create volume row.
+    final vRows = await db.query(
+      'volumes',
+      columns: ['id'],
+      where: 'name = ? AND website_id = ?',
+      whereArgs: [vName, websiteId],
+      limit: 1,
+    );
+    if (vRows.isNotEmpty) {
+      return vRows.first['id'] as String;
+    }
+    final volumeId = _uuid.v4();
+    await db.insert('volumes', {
+      'id': volumeId,
+      'name': vName,
+      'website_id': websiteId,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    });
+    return volumeId;
+  }
 
   Future<void> insertOrUpdate(Article article) async {
     final db = await _db;
-    final titleId = await _resolveOrCreateTitleId(
+    final volumeId = await _resolveOrCreateVolumeId(
       db,
       article.url,
       article.title,
-      novelName: article.homeUrl != null
+      volumeName: article.homeUrl != null
           ? Uri.parse(article.homeUrl!).pathSegments.last
           : null,
     );
-    final map = {...article.toMap(), 'title_id': titleId};
+    final map = {...article.toMap(), 'volume_id': volumeId};
     await db.insert(
       'articles',
       map,
@@ -295,186 +292,186 @@ class LocalArticleSource {
 
   // ─── Grouped queries ────────────────────────────────────────────────────
 
-  /// Recent: all titles that have at least one article, ordered by most-recently
-  /// read article first. Titles with no read history appear at the end (sorted
-  /// by title creation date). Each title includes ALL its articles, with
-  /// read articles first (most recent), then unread ones.
-  Future<List<TitleGroup>> getRecentGrouped() async {
-    final db = await _db;
-    final titleRows = await db.rawQuery('''
-      SELECT t.id AS title_id, COALESCE(t.display_name, t.name) AS title_name, w.domain AS website_domain,
-             MAX(rh.read_at) AS last_read_at
-      FROM titles t
-      JOIN websites w ON w.id = t.website_id
-      JOIN articles a ON a.title_id = t.id
-      LEFT JOIN read_history rh ON rh.article_id = a.id
-      GROUP BY t.id, t.name, w.domain
-      ORDER BY last_read_at DESC, t.created_at DESC
-    ''');
-
-    final groups = <TitleGroup>[];
-    for (final tr in titleRows) {
-      final titleId = tr['title_id'] as String;
-      final articleRows = await db.rawQuery(
-        '''
-        SELECT $_cols
-        FROM articles a
-        LEFT JOIN read_history rh ON rh.article_id = a.id
-        LEFT JOIN bookmarks b ON b.article_id = a.id
-        WHERE a.title_id = ?
-        ORDER BY rh.read_at DESC, a.created_at DESC
-      ''',
-        [titleId],
-      );
-      groups.add(
-        TitleGroup(
-          titleId: titleId,
-          titleName: tr['title_name'] as String,
-          websiteDomain: tr['website_domain'] as String,
-          articles: articleRows.map(Article.fromMap).toList(),
-        ),
-      );
-    }
-    return groups;
-  }
-
-  /// Bookmarked articles grouped by title, ordered by most-recently-bookmarked first.
-  Future<List<TitleGroup>> getBookmarksGrouped() async {
-    final db = await _db;
-    final titleRows = await db.rawQuery('''
-      SELECT t.id AS title_id, COALESCE(t.display_name, t.name) AS title_name, w.domain AS website_domain,
-             MAX(bk.bookmarked_at) AS last_bookmarked_at
-      FROM titles t
-      JOIN websites w ON w.id = t.website_id
-      JOIN articles a ON a.title_id = t.id
-      JOIN bookmarks bk ON bk.article_id = a.id
-      GROUP BY t.id, t.name, w.domain
-      ORDER BY last_bookmarked_at DESC
-    ''');
-
-    final groups = <TitleGroup>[];
-    for (final tr in titleRows) {
-      final titleId = tr['title_id'] as String;
-      final articleRows = await db.rawQuery(
-        '''
-        SELECT $_cols
-        FROM bookmarks bk
-        JOIN articles a ON a.id = bk.article_id
-        LEFT JOIN bookmarks b ON b.article_id = a.id
-        WHERE a.title_id = ?
-        ORDER BY bk.bookmarked_at DESC
-      ''',
-        [titleId],
-      );
-      groups.add(
-        TitleGroup(
-          titleId: titleId,
-          titleName: tr['title_name'] as String,
-          websiteDomain: tr['website_domain'] as String,
-          articles: articleRows.map(Article.fromMap).toList(),
-        ),
-      );
-    }
-    return groups;
-  }
-
-  // ─── Title management ───────────────────────────────────────────────────
-
-  Future<void> updateTitleName(String titleId, String name) async {
-    final db = await _db;
-    await db.update(
-      'titles',
-      {'display_name': name},
-      where: 'id = ?',
-      whereArgs: [titleId],
-    );
-  }
-
-  /// Remove all read_history rows for articles belonging to [titleId].
-    /// Also removes the articles from cache if they're not bookmarked.
-    Future<void> removeHistoryForTitle(String titleId) async {
+    /// Recent: all volumes that have at least one article, ordered by most-recently
+    /// read article first. Volumes with no read history appear at the end (sorted
+    /// by volume creation date). Each volume includes ALL its articles, with
+    /// read articles first (most recent), then unread ones.
+    Future<List<TitleGroup>> getRecentGrouped() async {
       final db = await _db;
-    
-      // First, get all article IDs for this title
+      final volumeRows = await db.rawQuery('''
+        SELECT v.id AS volume_id, COALESCE(v.display_name, v.name) AS volume_name, w.domain AS website_domain,
+               MAX(rh.read_at) AS last_read_at
+        FROM volumes v
+        JOIN websites w ON w.id = v.website_id
+        JOIN articles a ON a.volume_id = v.id
+        LEFT JOIN read_history rh ON rh.article_id = a.id
+        GROUP BY v.id, v.name, w.domain
+        ORDER BY last_read_at DESC, v.created_at DESC
+      ''');
+
+      final groups = <TitleGroup>[];
+      for (final vr in volumeRows) {
+        final volumeId = vr['volume_id'] as String;
+        final articleRows = await db.rawQuery(
+          '''
+          SELECT $_cols
+          FROM articles a
+          LEFT JOIN read_history rh ON rh.article_id = a.id
+          LEFT JOIN bookmarks b ON b.article_id = a.id
+          WHERE a.volume_id = ?
+          ORDER BY rh.read_at DESC, a.created_at DESC
+        ''',
+          [volumeId],
+        );
+        groups.add(
+          TitleGroup(
+            titleId: volumeId,
+            titleName: vr['volume_name'] as String,
+            websiteDomain: vr['website_domain'] as String,
+            articles: articleRows.map(Article.fromMap).toList(),
+          ),
+        );
+      }
+      return groups;
+    }
+
+    /// Bookmarked articles grouped by volume, ordered by most-recently-bookmarked first.
+    Future<List<TitleGroup>> getBookmarksGrouped() async {
+      final db = await _db;
+      final volumeRows = await db.rawQuery('''
+        SELECT v.id AS volume_id, COALESCE(v.display_name, v.name) AS volume_name, w.domain AS website_domain,
+               MAX(bk.bookmarked_at) AS last_bookmarked_at
+        FROM volumes v
+        JOIN websites w ON w.id = v.website_id
+        JOIN articles a ON a.volume_id = v.id
+        JOIN bookmarks bk ON bk.article_id = a.id
+        GROUP BY v.id, v.name, w.domain
+        ORDER BY last_bookmarked_at DESC
+      ''');
+
+      final groups = <TitleGroup>[];
+      for (final vr in volumeRows) {
+        final volumeId = vr['volume_id'] as String;
+        final articleRows = await db.rawQuery(
+          '''
+          SELECT $_cols
+          FROM bookmarks bk
+          JOIN articles a ON a.id = bk.article_id
+          LEFT JOIN bookmarks b ON b.article_id = a.id
+          WHERE a.volume_id = ?
+          ORDER BY bk.bookmarked_at DESC
+        ''',
+          [volumeId],
+        );
+        groups.add(
+          TitleGroup(
+            titleId: volumeId,
+            titleName: vr['volume_name'] as String,
+            websiteDomain: vr['website_domain'] as String,
+            articles: articleRows.map(Article.fromMap).toList(),
+          ),
+        );
+      }
+      return groups;
+    }
+
+    // ─── Volume management ───────────────────────────────────────────────────
+
+    Future<void> updateVolumeName(String volumeId, String name) async {
+      final db = await _db;
+      await db.update(
+        'volumes',
+        {'display_name': name},
+        where: 'id = ?',
+        whereArgs: [volumeId],
+      );
+    }
+
+    /// Remove all read_history rows for articles belonging to [volumeId].
+    /// Also removes the articles from cache if they're not bookmarked.
+    Future<void> removeHistoryForVolume(String volumeId) async {
+      final db = await _db;
+
+      // First, get all article IDs for this volume
       final articleRows = await db.query(
         'articles',
         columns: ['id'],
-        where: 'title_id = ?',
-        whereArgs: [titleId],
+        where: 'volume_id = ?',
+        whereArgs: [volumeId],
       );
       final articleIds = articleRows.map((r) => r['id'] as String).toList();
-    
+
       // Delete from read_history
       await db.rawDelete(
         '''
         DELETE FROM read_history
-        WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)
+        WHERE article_id IN (SELECT id FROM articles WHERE volume_id = ?)
         ''',
-        [titleId],
+        [volumeId],
       );
-    
+
       // Delete articles from cache if they're not bookmarked
       if (articleIds.isNotEmpty) {
         await db.rawDelete(
           '''
           DELETE FROM articles
-          WHERE title_id = ? 
+          WHERE volume_id = ?
           AND id NOT IN (SELECT article_id FROM bookmarks)
           ''',
-          [titleId],
+          [volumeId],
         );
       }
-    
+
       // Clean up orphaned reading_states
       if (articleIds.isNotEmpty) {
         await db.rawDelete(
-          'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)',
-          [titleId],
+          'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE volume_id = ?)',
+          [volumeId],
         );
       }
     }
 
-    /// Remove all bookmark rows for articles belonging to [titleId].
+    /// Remove all bookmark rows for articles belonging to [volumeId].
     /// Also removes the articles from cache if they're not in read history.
-    Future<void> removeBookmarksForTitle(String titleId) async {
+    Future<void> removeBookmarksForVolume(String volumeId) async {
       final db = await _db;
-    
-      // First, get all article IDs for this title
+
+      // First, get all article IDs for this volume
       final articleRows = await db.query(
         'articles',
         columns: ['id'],
-        where: 'title_id = ?',
-        whereArgs: [titleId],
+        where: 'volume_id = ?',
+        whereArgs: [volumeId],
       );
       final articleIds = articleRows.map((r) => r['id'] as String).toList();
-    
+
       // Delete from bookmarks
       await db.rawDelete(
         '''
         DELETE FROM bookmarks
-        WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)
+        WHERE article_id IN (SELECT id FROM articles WHERE volume_id = ?)
         ''',
-        [titleId],
+        [volumeId],
       );
-    
+
       // Delete articles from cache if they're not in read history
       if (articleIds.isNotEmpty) {
         await db.rawDelete(
           '''
           DELETE FROM articles
-          WHERE title_id = ? 
+          WHERE volume_id = ?
           AND id NOT IN (SELECT article_id FROM read_history)
           ''',
-          [titleId],
+          [volumeId],
         );
       }
-    
+
       // Clean up orphaned reading_states
       if (articleIds.isNotEmpty) {
         await db.rawDelete(
-          'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE title_id = ?)',
-          [titleId],
+          'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE volume_id = ?)',
+          [volumeId],
         );
       }
     }
-}
+  }
