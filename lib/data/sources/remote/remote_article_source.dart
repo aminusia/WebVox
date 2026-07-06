@@ -20,7 +20,8 @@ class RemoteArticleSource {
     'cf-ipcountry': 'ID',
     'pragma': 'no-cache',
     'priority': 'u=1, i',
-    'sec-ch-ua': '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
+    'sec-ch-ua':
+        '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"macOS"',
     'sec-fetch-dest': 'empty',
@@ -42,7 +43,8 @@ class RemoteArticleSource {
         'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     'accept-language': 'en-US,en;q=0.9',
     'priority': 'u=0, i',
-    'sec-ch-ua': '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
+    'sec-ch-ua':
+        '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"macOS"',
     'sec-fetch-dest': 'document',
@@ -67,7 +69,7 @@ class RemoteArticleSource {
     final uri = Uri.parse(url);
     // Check if this is a novelarrow.com chapter URL
     if (uri.host == 'novelarrow.com' && uri.pathSegments.contains('chapter')) {
-      return _fetchNovelArrowChapter(url, refererUrl: refererUrl);
+      return _fetchChapterWithAPI(url, refererUrl: refererUrl);
     }
 
     // Check if this is a freewebnovel.com URL
@@ -169,15 +171,17 @@ class RemoteArticleSource {
     }
   }
 
-  /// Fetches a chapter from novelarrow.com via their API.
+  /// Fetches a chapter from websites like novelarrow.com via their API.
   /// The refererUrl should be the previous chapter's web URL (not API URL).
   /// For the first chapter, refererUrl can be null.
-  Future<({ParsedArticle article, String finalUrl})> _fetchNovelArrowChapter(
+  Future<({ParsedArticle article, String finalUrl})> _fetchChapterWithAPI(
     String url, {
     String? refererUrl,
   }) async {
-    debugPrint('[NovelArrow] Fetching chapter: $url');
-    debugPrint('[NovelArrow] refererUrl: ${refererUrl ?? "(none - first chapter)"}');
+    debugPrint('[APIFetch] Fetching chapter: $url');
+    debugPrint(
+      '[APIFetch] refererUrl: ${refererUrl ?? "(none - first chapter)"}',
+    );
 
     final uri = Uri.parse(url);
     final pathSegments = uri.pathSegments;
@@ -185,16 +189,19 @@ class RemoteArticleSource {
     // URL format: https://novelarrow.com/chapter/<novel-slug>/<chapter-slug>
     // API format: https://novelarrow.com/api-web/novels/<novel-slug>/chapters/<chapter-slug>
     if (pathSegments.length < 3 || pathSegments[0] != 'chapter') {
-      debugPrint('[NovelArrow] ERROR: Invalid chapter URL format: $url');
+      debugPrint('[APIFetch] ERROR: Invalid chapter URL format: $url');
       throw Exception('Invalid novelarrow.com chapter URL: $url');
     }
     final novelSlug = pathSegments[1];
     final chapterSlug = pathSegments[2];
-    debugPrint('[NovelArrow] Parsed: novelSlug=$novelSlug, chapterSlug=$chapterSlug');
+    debugPrint(
+      '[APIFetch] Parsed: novelSlug=$novelSlug, chapterSlug=$chapterSlug',
+    );
 
     // Build the API URL
-    final apiUrl = '$_novelArrowApiBase/novels/$novelSlug/chapters/$chapterSlug';
-    debugPrint('[NovelArrow] API URL: $apiUrl');
+    final apiUrl =
+        '$_novelArrowApiBase/novels/$novelSlug/chapters/$chapterSlug';
+    debugPrint('[APIFetch] API URL: $apiUrl');
 
     // Build headers - use the previous chapter's web URL as referer
     // For the first chapter, refererUrl is null so we omit it (like the first fetch in the example)
@@ -203,9 +210,9 @@ class RemoteArticleSource {
       // Convert chapter web URL to the format used as referer
       // The referer should be the web chapter URL, not API URL
       headers['Referer'] = refererUrl.trim();
-      debugPrint('[NovelArrow] Referer header set: ${refererUrl.trim()}');
+      debugPrint('[APIFetch] Referer header set: ${refererUrl.trim()}');
     } else {
-      debugPrint('[NovelArrow] No Referer header (first chapter)');
+      debugPrint('[APIFetch] No Referer header (first chapter)');
     }
 
     final client = HttpClient();
@@ -213,7 +220,7 @@ class RemoteArticleSource {
     client.idleTimeout = AppConstants.fetchTimeout;
 
     try {
-      debugPrint('[NovelArrow] Creating HTTP request...');
+      debugPrint('[APIFetch] Creating HTTP request...');
       final request = await client
           .getUrl(Uri.parse(apiUrl))
           .timeout(AppConstants.fetchTimeout);
@@ -223,26 +230,27 @@ class RemoteArticleSource {
       headers.forEach((key, value) {
         request.headers.set(key, value);
       });
-      debugPrint('[NovelArrow] Headers set, sending request...');
+      debugPrint('[APIFetch] Headers set, sending request...');
 
       final response = await request.close().timeout(AppConstants.fetchTimeout);
-      debugPrint('[NovelArrow] Response received: statusCode=${response.statusCode}');
+      debugPrint(
+        '[APIFetch] Response received: statusCode=${response.statusCode}',
+      );
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        debugPrint('[NovelArrow] ERROR: HTTP ${response.statusCode} for $apiUrl');
-        throw Exception(
-            'HTTP ${response.statusCode}: failed to fetch $apiUrl');
+        debugPrint('[APIFetch] ERROR: HTTP ${response.statusCode} for $apiUrl');
+        throw Exception('HTTP ${response.statusCode}: failed to fetch $apiUrl');
       }
 
       final contentType = response.headers.contentType;
       final charset = contentType?.charset?.toLowerCase() ?? 'utf-8';
-      debugPrint('[NovelArrow] Content-Type: $contentType, charset: $charset');
+      debugPrint('[APIFetch] Content-Type: $contentType, charset: $charset');
 
       final bodyBytes = await response
           .expand((chunk) => chunk)
           .toList()
           .timeout(AppConstants.fetchTimeout);
-      debugPrint('[NovelArrow] Body bytes received: ${bodyBytes.length} bytes');
+      debugPrint('[APIFetch] Body bytes received: ${bodyBytes.length} bytes');
       final bytes = Uint8List.fromList(bodyBytes);
 
       final String body;
@@ -251,43 +259,52 @@ class RemoteArticleSource {
       } else {
         body = latin1.decode(bytes);
       }
-      debugPrint('[NovelArrow] Body decoded (first 500 chars): ${body.substring(0, body.length.clamp(0, 500))}');
+      debugPrint(
+        '[APIFetch] Body decoded (first 500 chars): ${body.substring(0, body.length.clamp(0, 500))}',
+      );
 
       // Parse the JSON response from the novelarrow API
       final jsonData = jsonDecode(body) as Map<String, dynamic>;
-      debugPrint('[NovelArrow] JSON parsed, keys: ${jsonData.keys.join(", ")}');
+      debugPrint('[APIFetch] JSON parsed, keys: ${jsonData.keys.join(", ")}');
 
       // The API returns chapter content at item.chapterInfo
       // Structure: { "item": { "chapterInfo": { "chapter_content": "...", "title": "...", "chapter_name": "Chapter 827 825: The Squad Gathers Together", "novel": {"novel_id": "sage-of-humanity", "novel_name": "Sage of Humanity"}, "chapter_id": "chapter-827-825-the-squad-gathers-together", "prevChapter": {"chapter_id": "...", "chapter_name": "..."}, "nextChapter": {"chapter_id": "...", "chapter_name": "..."} } } }
       final item = jsonData['item'] as Map<String, dynamic>?;
       final chapterInfo = item?['chapterInfo'] as Map<String, dynamic>?;
       if (chapterInfo == null) {
-        debugPrint('[NovelArrow] ERROR: chapterInfo not found in response');
+        debugPrint('[APIFetch] ERROR: chapterInfo not found in response');
         throw Exception('Invalid API response: missing chapterInfo');
       }
-      debugPrint('[NovelArrow] chapterInfo keys: ${chapterInfo.keys.join(", ")}');
-      
+      debugPrint('[APIFetch] chapterInfo keys: ${chapterInfo.keys.join(", ")}');
+
       // Extract chapter name from chapter_name field (format: "Chapter N M: Name")
       final chapterNameRaw = chapterInfo['chapter_name'] as String?;
       final chapterName = chapterNameRaw?.split(':').last.trim() ?? 'Chapter';
-      
+
       // Use novel_name from chapterInfo for the novel/series title (db.titles.name)
       final novelName = chapterInfo['novel_name'] as String?;
-      
-      final contentHtml = (chapterInfo['chapter_content'] as String? ?? chapterInfo['content'] as String? ?? '');
-      debugPrint('[NovelArrow] Chapter name: $chapterName, Novel name: $novelName, Content HTML length: ${contentHtml.length}');
-      
+
+      final contentHtml =
+          (chapterInfo['chapter_content'] as String? ??
+              chapterInfo['content'] as String? ??
+              '');
+      debugPrint(
+        '[APIFetch] Chapter name: $chapterName, Novel name: $novelName, Content HTML length: ${contentHtml.length}',
+      );
+
       // Extract novel ID and chapter ID for building API URLs
       final novel = chapterInfo['novel'] as Map<String, dynamic>?;
       final novelId = novel?['novel_id'] as String?;
       final chapterId = chapterInfo['chapter_id'] as String?;
-      debugPrint('[NovelArrow] novelId: $novelId, chapterId: $chapterId');
-      
+      debugPrint('[APIFetch] novelId: $novelId, chapterId: $chapterId');
+
       final prevChapter = chapterInfo['prevChapter'] as Map<String, dynamic>?;
       final nextChapter = chapterInfo['nextChapter'] as Map<String, dynamic>?;
       final prevChapterId = prevChapter?['chapter_id'] as String?;
       final nextChapterId = nextChapter?['chapter_id'] as String?;
-      debugPrint('[NovelArrow] prevChapterId: $prevChapterId, nextChapterId: $nextChapterId');
+      debugPrint(
+        '[APIFetch] prevChapterId: $prevChapterId, nextChapterId: $nextChapterId',
+      );
 
       // Build WEB URLs for prev/next navigation (so refererUrl passed to next fetch is correct web URL)
       // Web URL format: https://novelarrow.com/chapter/{novelId}/{chapterId}
@@ -297,7 +314,7 @@ class RemoteArticleSource {
       } else {
         prevUrl = null;
       }
-      
+
       final String? nextUrl;
       if (novelId != null && nextChapterId != null) {
         nextUrl = 'https://novelarrow.com/chapter/$novelId/$nextChapterId';
@@ -306,32 +323,33 @@ class RemoteArticleSource {
       }
 
       // Parse the HTML content using the existing HTML parser
-      final finalUrl = apiUrl;
-      debugPrint('[NovelArrow] Parsing HTML content...');
+      final finalUrl = 'https://novelarrow.com/chapter/$novelId/$chapterId';
+      debugPrint('[APIFetch] Parsing HTML content...');
       var article = _parser.parse(contentHtml, finalUrl);
-      debugPrint('[NovelArrow] Parsed paragraphs: ${article.paragraphs.length}');
+      debugPrint('[APIFetch] Parsed paragraphs: ${article.paragraphs.length}');
       article = ParsedArticle(
-        title: chapterName,  // Use extracted chapter name (e.g., "The Squad Gathers Together")
+        title:
+            chapterName, // Use extracted chapter name (e.g., "The Squad Gathers Together")
         paragraphs: article.paragraphs,
         author: article.author,
         language: article.language,
         estimatedReadTime: article.estimatedReadTime,
         prevUrl: prevUrl,
         nextUrl: nextUrl,
-        homeUrl: novelName != null
-            ? 'https://novelarrow.com/novel/$novelName'
-            : 'https://novelarrow.com/novel/$novelSlug',
+        homeUrl: 'https://novelarrow.com/novel/$novelSlug',
       );
 
       if (article.paragraphs.isEmpty) {
-        debugPrint('[NovelArrow] ERROR: No readable content found after parsing');
+        debugPrint('[APIFetch] ERROR: No readable content found after parsing');
         throw Exception('No readable content found at $finalUrl');
       }
-      debugPrint('[NovelArrow] SUCCESS: Chapter fetched, ${article.paragraphs.length} paragraphs');
+      debugPrint(
+        '[APIFetch] SUCCESS: Chapter fetched, ${article.paragraphs.length} paragraphs',
+      );
       return (article: article, finalUrl: finalUrl);
     } catch (e, st) {
-      debugPrint('[NovelArrow] ERROR: $e');
-      debugPrint('[NovelArrow] Stack trace: $st');
+      debugPrint('[APIFetch] ERROR: $e');
+      debugPrint('[APIFetch] Stack trace: $st');
       rethrow;
     } finally {
       client.close(force: false);

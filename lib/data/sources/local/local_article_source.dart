@@ -22,53 +22,61 @@ class LocalArticleSource {
 
   /// Returns the title_id for the given article URL + title, creating the
   /// website and/or title record if they don't exist yet.
-  Future<String> _resolveOrCreateTitleId(
-    Database db,
-    String url,
-    String articleTitle,
-  ) async {
-    final domain = TitleExtractor.extractDomain(url);
-    final bookTitle = TitleExtractor.extractBookTitle(articleTitle);
+  /// If [novelName] is provided, it's used directly as the title name (for series/novel grouping)
+  /// instead of extracting from articleTitle.
+  /// Returns the title_id for the given article URL + title, creating the
+    /// website and/or title record if they don't exist yet.
+    /// If [novelName] is provided (e.g., from novelarrow.com API), it's used as the
+    /// title name instead of extracting from article title.
+    Future<String> _resolveOrCreateTitleId(
+      Database db,
+      String url,
+      String articleTitle, {
+      String? novelName,
+    }) async {
+      final domain = TitleExtractor.extractDomain(url);
+      // Use novelName if provided (e.g., from API), otherwise extract from article title
+      final bookTitle = novelName ?? TitleExtractor.extractBookTitle(articleTitle);
 
-    // Find or create website row.
-    final wsRows = await db.query(
-      'websites',
-      columns: ['id'],
-      where: 'domain = ?',
-      whereArgs: [domain],
-      limit: 1,
-    );
-    final String websiteId;
-    if (wsRows.isNotEmpty) {
-      websiteId = wsRows.first['id'] as String;
-    } else {
-      websiteId = _uuid.v4();
-      await db.insert('websites', {
-        'id': websiteId,
-        'domain': domain,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
-    }
+      // Find or create website row.
+      final wsRows = await db.query(
+        'websites',
+        columns: ['id'],
+        where: 'domain = ?',
+        whereArgs: [domain],
+        limit: 1,
+      );
+      final String websiteId;
+      if (wsRows.isNotEmpty) {
+        websiteId = wsRows.first['id'] as String;
+      } else {
+        websiteId = _uuid.v4();
+        await db.insert('websites', {
+          'id': websiteId,
+          'domain': domain,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
 
-    // Find or create title row.
-    final tRows = await db.query(
-      'titles',
-      columns: ['id'],
-      where: 'name = ? AND website_id = ?',
-      whereArgs: [bookTitle, websiteId],
-      limit: 1,
-    );
-    if (tRows.isNotEmpty) {
-      return tRows.first['id'] as String;
+      // Find or create title row.
+      final tRows = await db.query(
+        'titles',
+        columns: ['id'],
+        where: 'name = ? AND website_id = ?',
+        whereArgs: [bookTitle, websiteId],
+        limit: 1,
+      );
+      if (tRows.isNotEmpty) {
+        return tRows.first['id'] as String;
+      }
+      final titleId = _uuid.v4();
+      await db.insert('titles', {
+        'id': titleId,
+        'name': bookTitle,
+        'website_id': websiteId,
+        'created_at': DateTime.now().millisecondsSinceEpoch,
+      });
+      return titleId;
     }
-    final titleId = _uuid.v4();
-    await db.insert('titles', {
-      'id': titleId,
-      'name': bookTitle,
-      'website_id': websiteId,
-      'created_at': DateTime.now().millisecondsSinceEpoch,
-    });
-    return titleId;
-  }
 
   Future<void> insertOrUpdate(Article article) async {
     final db = await _db;
@@ -76,6 +84,9 @@ class LocalArticleSource {
       db,
       article.url,
       article.title,
+      novelName: article.homeUrl != null
+          ? Uri.parse(article.homeUrl!).pathSegments.last
+          : null,
     );
     final map = {...article.toMap(), 'title_id': titleId};
     await db.insert(

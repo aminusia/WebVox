@@ -641,92 +641,107 @@ class _TitleAccordionState extends State<_TitleAccordion> {
             ? articles
             : articles.take(_initialLimit).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Title header
-        InkWell(
-          onTap: widget.onToggle,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 10, 4, 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                AnimatedRotation(
-                  turns: widget.isExpanded ? 0.25 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: const Icon(Icons.chevron_right, size: 20),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.group.titleName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w400,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        widget.group.websiteDomain,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: dimColor,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+    return RepaintBoundary(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Title header
+          InkWell(
+            onTap: widget.onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 10, 4, 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  AnimatedRotation(
+                    turns: widget.isExpanded ? 0.25 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(Icons.chevron_right, size: 20),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  tooltip: 'Rename',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: widget.onRename,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  tooltip: 'Remove',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: widget.onDelete,
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.group.titleName,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w400,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          widget.group.websiteDomain,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: dimColor,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    tooltip: 'Rename',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onRename,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    tooltip: 'Remove',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onDelete,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Article list (animated)
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 200),
+            crossFadeState:
+                widget.isExpanded
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+            firstChild: Column(
+              children: [
+                // Use ListView.builder with shrinkWrap for better performance
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount:
+                      visibleArticles.length +
+                      (hasMore
+                          ? 1
+                          : 0), // +1 for "Show more/less" button
+                  itemBuilder: (context, index) {
+                    if (index == visibleArticles.length && hasMore) {
+                      return TextButton(
+                        onPressed: () =>
+                            setState(() => _showAll = !_showAll),
+                        child: Text(
+                          _showAll
+                              ? 'Show less'
+                              : 'Show ${articles.length - _initialLimit} more…',
+                        ),
+                      );
+                    }
+                    final article = visibleArticles[index];
+                    return _ArticleTile(
+                      article: article,
+                      onTap: widget.onArticleTap,
+                      onDelete: widget.onDeleteArticle,
+                    );
+                  },
                 ),
               ],
             ),
+            secondChild: const SizedBox.shrink(),
           ),
-        ),
-        // Article list (animated)
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 200),
-          crossFadeState:
-              widget.isExpanded
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-          firstChild: Column(
-            children: [
-              ...visibleArticles.map(
-                (a) => _ArticleTile(
-                  article: a,
-                  onTap: widget.onArticleTap,
-                  onDelete: widget.onDeleteArticle,
-                ),
-              ),
-              if (hasMore)
-                TextButton(
-                  onPressed: () => setState(() => _showAll = !_showAll),
-                  child: Text(
-                    _showAll
-                        ? 'Show less'
-                        : 'Show ${articles.length - _initialLimit} more…',
-                  ),
-                ),
-            ],
-          ),
-          secondChild: const SizedBox.shrink(),
-        ),
-        const Divider(height: 1),
-      ],
+          const Divider(height: 1),
+        ],
+      ),
     );
   }
 }

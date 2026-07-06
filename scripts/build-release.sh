@@ -86,19 +86,6 @@ flutter build appbundle --release
 printf 'Building release APK...\n'
 flutter build apk --release
 
-if [ ! -f "$FLUTTER_APK" ]; then
-  echo "Error: APK not found at $FLUTTER_APK." >&2
-  exit 1
-fi
-
-mkdir -p "$DIST_DIR"
-dest="$DIST_DIR/${package_name}-${new_version}.apk"
-cp "$FLUTTER_APK" "$dest"
-cp "$FLUTTER_APK" "$DIST_DIR/${package_name}-latest.apk"
-
-printf 'Release APK copied to %s\n' "$dest"
-printf 'Also copied latest APK to %s\n' "$DIST_DIR/${package_name}-latest.apk"
-
 if [ "$PUBLISH" = true ]; then
   fastlane android deploy_internal publish
 fi

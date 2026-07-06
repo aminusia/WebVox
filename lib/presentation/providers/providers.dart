@@ -183,12 +183,29 @@ class RecentGroupedNotifier
 
   Future<void> removeTitle(String titleId) async {
     await _repo.removeHistoryForTitle(titleId);
-    await load();
+    // Optimistically update state without full reload
+    state.whenData((groups) {
+      state = AsyncData(groups.where((g) => g.titleId != titleId).toList());
+    });
   }
 
   Future<void> renameTitle(String titleId, String newName) async {
     await _repo.updateTitleName(titleId, newName);
-    await load();
+    // Optimistically update the title name
+    state.whenData((groups) {
+      final updatedGroups = groups.map((g) {
+        if (g.titleId == titleId) {
+          return TitleGroup(
+            titleId: g.titleId,
+            titleName: newName,
+            websiteDomain: g.websiteDomain,
+            articles: g.articles,
+          );
+        }
+        return g;
+      }).toList();
+      state = AsyncData(updatedGroups);
+    });
   }
 }
 
@@ -214,17 +231,48 @@ class BookmarksGroupedNotifier
 
   Future<void> removeTitle(String titleId) async {
     await _repo.removeBookmarksForTitle(titleId);
-    await load();
+    // Optimistically update state without full reload
+    state.whenData((groups) {
+      state = AsyncData(groups.where((g) => g.titleId != titleId).toList());
+    });
   }
 
   Future<void> renameTitle(String titleId, String newName) async {
     await _repo.updateTitleName(titleId, newName);
-    await load();
+    // Optimistically update the title name
+    state.whenData((groups) {
+      final updatedGroups = groups.map((g) {
+        if (g.titleId == titleId) {
+          return TitleGroup(
+            titleId: g.titleId,
+            titleName: newName,
+            websiteDomain: g.websiteDomain,
+            articles: g.articles,
+          );
+        }
+        return g;
+      }).toList();
+      state = AsyncData(updatedGroups);
+    });
   }
 
   Future<void> removeArticle(String articleId) async {
     await _repo.toggleBookmark(articleId);
-    await load();
+    // Optimistically remove article from bookmarks
+    state.whenData((groups) {
+      final updatedGroups = groups.map((g) {
+        final filteredArticles =
+            g.articles.where((a) => a.id != articleId).toList();
+        if (filteredArticles.length == g.articles.length) return g;
+        return TitleGroup(
+          titleId: g.titleId,
+          titleName: g.titleName,
+          websiteDomain: g.websiteDomain,
+          articles: filteredArticles,
+        );
+      }).where((g) => g.articles.isNotEmpty).toList();
+      state = AsyncData(updatedGroups);
+    });
   }
 }
 
