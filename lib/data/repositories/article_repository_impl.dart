@@ -36,7 +36,7 @@ class ArticleRepositoryImpl implements ArticleRepository {
         prevUrl: cached.prevUrl,
         nextUrl: cached.nextUrl,
         homeUrl: cached.homeUrl,
-        volumeId: cached.volumeId,
+        seriesId: cached.seriesId,
         isCached: true,
       );
       await _local.insertOrUpdate(refreshed);
@@ -64,7 +64,7 @@ class ArticleRepositoryImpl implements ArticleRepository {
           prevUrl: cachedFinal.prevUrl,
           nextUrl: cachedFinal.nextUrl,
           homeUrl: cachedFinal.homeUrl,
-          volumeId: cachedFinal.volumeId,
+          seriesId: cachedFinal.seriesId,
           isCached: true,
         );
         await _local.insertOrUpdate(refreshed);
@@ -85,7 +85,7 @@ class ArticleRepositoryImpl implements ArticleRepository {
       prevUrl: parsed.prevUrl,
       nextUrl: parsed.nextUrl,
       homeUrl: parsed.homeUrl,
-      volumeId: parsed.volumeName != null ? null : null, // volumeId will be resolved in insertOrUpdate via homeUrl
+      seriesId: parsed.seriesName != null ? null : null, // seriesId will be resolved in insertOrUpdate via homeUrl
     );
 
     await _local.insertOrUpdate(article);
@@ -148,13 +148,13 @@ class ArticleRepositoryImpl implements ArticleRepository {
 
   @override
   Future<void> updateTitleName(String titleId, String name) =>
-      _local.updateVolumeName(titleId, name);
+      _local.updateSeriesName(titleId, name);
 
   @override
   Future<void> removeHistoryForTitle(String titleId) =>
-      _local.removeHistoryForVolume(titleId);
+      _local.removeHistoryForSeries(titleId);
 
   @override
   Future<void> removeBookmarksForTitle(String titleId) =>
-      _local.removeBookmarksForVolume(titleId);
+      _local.removeBookmarksForSeries(titleId);
 }

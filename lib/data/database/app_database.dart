@@ -185,54 +185,75 @@ class AppDatabase {
       // original name (which is used for matching new articles to groups).
       await db.execute('ALTER TABLE series ADD COLUMN display_name TEXT');
     }
-    if (oldVersion < 9) {
+    if (oldVersion < 11) {
+      // Make bookmarks and read_history independent from articles table
+      // Add new columns to bookmarks
+      await db.execute('ALTER TABLE bookmarks ADD COLUMN id TEXT');
+      await db.execute('ALTER TABLE bookmarks ADD COLUMN series_id TEXT');
+      await db.execute('ALTER TABLE bookmarks ADD COLUMN title TEXT');
+      await db.execute('ALTER TABLE bookmarks ADD COLUMN url TEXT');
+      
+      // Migrate existing bookmarks: populate id, title, url from articles
+      // Use COALESCE to provide fallback values for deleted articles
+      await db.rawUpdate('''
+        UPDATE bookmarks SET 
+          id = article_id,
+          title = COALESCE((SELECT title FROM articles WHERE id = bookmarks.article_id), 'Unknown Title'),
+          url = COALESCE((SELECT url FROM articles WHERE id = bookmarks.article_id), ''),
+          series_id = (SELECT series_id FROM articles WHERE id = bookmarks.article_id)
+      ''');
+      
+      // Make article_id nullable (we can't change PK directly in SQLite, so rebuild)
       await db.execute('''
-        CREATE TABLE IF NOT EXISTS tts_voices (
-          name TEXT PRIMARY KEY,
-          lang_tag TEXT NOT NULL,
-          locale TEXT NOT NULL,
-          display_name TEXT NOT NULL,
-          gender TEXT,
-          quality TEXT
+        CREATE TABLE bookmarks_new (
+          id TEXT PRIMARY KEY,
+          article_id TEXT,
+          series_id TEXT,
+          title TEXT NOT NULL,
+          url TEXT NOT NULL,
+          bookmarked_at INTEGER NOT NULL
         )
       ''');
-    }
-    if (oldVersion < 10) {
-      // Migration from titles -> volumes table rename
-      // Check if titles table exists and rename it
-      final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='titles'");
-      if (tables.isNotEmpty) {
-        await db.execute('ALTER TABLE titles RENAME TO series');
-        // Also rename title_id column in articles to series_id
-        // SQLite doesn't support column rename directly, so we need to rebuild
-        await db.execute('''
-          CREATE TABLE articles_new (
-            id TEXT PRIMARY KEY,
-            url TEXT NOT NULL UNIQUE,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            author TEXT,
-            language TEXT NOT NULL DEFAULT 'en-US',
-            estimated_read_time INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            prev_url TEXT,
-            next_url TEXT,
-            home_url TEXT,
-            series_id TEXT
-          )
-        ''');
-        await db.rawInsert('''
-          INSERT INTO articles_new
-            (id, url, title, content, author, language,
-             estimated_read_time, created_at, prev_url, next_url, home_url, series_id)
-          SELECT
-            id, url, title, content, author, language,
-            estimated_read_time, created_at, prev_url, next_url, home_url, title_id
-          FROM articles
-        ''');
-        await db.execute('DROP TABLE articles');
-        await db.execute('ALTER TABLE articles_new RENAME TO articles');
-      }
+      await db.rawInsert('''
+        INSERT INTO bookmarks_new (id, article_id, series_id, title, url, bookmarked_at)
+        SELECT id, article_id, series_id, title, url, bookmarked_at FROM bookmarks
+      ''');
+      await db.execute('DROP TABLE bookmarks');
+      await db.execute('ALTER TABLE bookmarks_new RENAME TO bookmarks');
+      
+      // Add new columns to read_history
+      await db.execute('ALTER TABLE read_history ADD COLUMN id TEXT');
+      await db.execute('ALTER TABLE read_history ADD COLUMN series_id TEXT');
+      await db.execute('ALTER TABLE read_history ADD COLUMN title TEXT');
+      await db.execute('ALTER TABLE read_history ADD COLUMN url TEXT');
+      
+      // Migrate existing read_history: populate id, title, url from articles
+      await db.rawUpdate('''
+        UPDATE read_history SET 
+          id = article_id,
+          title = COALESCE((SELECT title FROM articles WHERE id = read_history.article_id), 'Unknown Title'),
+          url = COALESCE((SELECT url FROM articles WHERE id = read_history.article_id), ''),
+          series_id = (SELECT series_id FROM articles WHERE id = read_history.article_id)
+      ''');
+      
+      // Rebuild read_history table with nullable article_id
+      await db.execute('''
+        CREATE TABLE read_history_new (
+          id TEXT PRIMARY KEY,
+          article_id TEXT,
+          series_id TEXT,
+          title TEXT NOT NULL,
+          url TEXT NOT NULL,
+          read_at INTEGER NOT NULL,
+          is_completed INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
+      await db.rawInsert('''
+        INSERT INTO read_history_new (id, article_id, series_id, title, url, read_at, is_completed)
+        SELECT id, article_id, series_id, title, url, read_at, is_completed FROM read_history
+      ''');
+      await db.execute('DROP TABLE read_history');
+      await db.execute('ALTER TABLE read_history_new RENAME TO read_history');
     }
   }
 
@@ -294,14 +315,22 @@ class AppDatabase {
 
     await db.execute('''
       CREATE TABLE bookmarks (
-        article_id TEXT PRIMARY KEY,
+        id TEXT PRIMARY KEY,
+        article_id TEXT,
+        series_id TEXT,
+        title TEXT NOT NULL,
+        url TEXT NOT NULL,
         bookmarked_at INTEGER NOT NULL
       )
     ''');
 
     await db.execute('''
       CREATE TABLE read_history (
-        article_id TEXT PRIMARY KEY,
+        id TEXT PRIMARY KEY,
+        article_id TEXT,
+        series_id TEXT,
+        title TEXT NOT NULL,
+        url TEXT NOT NULL,
         read_at INTEGER NOT NULL,
         is_completed INTEGER NOT NULL DEFAULT 0
       )

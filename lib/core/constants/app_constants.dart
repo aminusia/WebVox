@@ -1,6 +1,6 @@
 class AppConstants {
   static const String dbName = 'web_reader.db';
-  static const int dbVersion = 10;
+  static const int dbVersion = 11;
 
   static const String prefTtsLanguage = 'tts_language';
   static const String prefTtsSpeed = 'tts_speed';

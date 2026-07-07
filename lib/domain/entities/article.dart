@@ -12,7 +12,7 @@ class Article {
   final String? prevUrl;
   final String? nextUrl;
   final String? homeUrl;
-  final String? volumeId; // FK to volumes table
+  final String? seriesId; // FK to series table
 
   /// True when this article was served from the local cache (not freshly fetched).
   /// Not persisted to DB — purely a runtime flag.
@@ -31,7 +31,7 @@ class Article {
     this.prevUrl,
     this.nextUrl,
     this.homeUrl,
-    this.volumeId,
+    this.seriesId,
     this.isCached = false,
   });
 
@@ -51,7 +51,7 @@ class Article {
     String? prevUrl,
     String? nextUrl,
     String? homeUrl,
-    String? volumeId,
+    String? seriesId,
     bool? isCached,
   }) {
     return Article(
@@ -67,7 +67,7 @@ class Article {
       prevUrl: prevUrl ?? this.prevUrl,
       nextUrl: nextUrl ?? this.nextUrl,
       homeUrl: homeUrl ?? this.homeUrl,
-      volumeId: volumeId ?? this.volumeId,
+      seriesId: seriesId ?? this.seriesId,
       isCached: isCached ?? this.isCached,
     );
   }
@@ -84,7 +84,7 @@ class Article {
     'prev_url': prevUrl,
     'next_url': nextUrl,
     'home_url': homeUrl,
-    'volume_id': volumeId,
+    'series_id': seriesId,
   };
 
   factory Article.fromMap(Map<String, dynamic> map) => Article(
@@ -100,7 +100,7 @@ class Article {
     prevUrl: map['prev_url'] as String?,
     nextUrl: map['next_url'] as String?,
     homeUrl: map['home_url'] as String?,
-    volumeId: map['volume_id'] as String?,
+    seriesId: map['series_id'] as String?,
     isCached: true, // loaded from local DB → served from cache
   );
 }
