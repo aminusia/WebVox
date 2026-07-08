@@ -79,9 +79,10 @@ class LocalArticleSource {
       db,
       article.url,
       article.title,
-      seriesName: article.homeUrl != null
-          ? Uri.parse(article.homeUrl!).pathSegments.last
-          : null,
+      seriesName:
+          article.homeUrl != null
+              ? Uri.parse(article.homeUrl!).pathSegments.last
+              : null,
     );
     final map = {...article.toMap(), 'series_id': seriesId};
     await db.insert(
@@ -290,53 +291,59 @@ class LocalArticleSource {
 
   // ─── Grouped queries ────────────────────────────────────────────────────
 
-    /// Recent: all series that have at least one article, ordered by most-recently
-        /// read article first. Series with no read history appear at the end (sorted
-        /// by series creation date). Each series includes ALL its articles, with
-        /// read articles first (most recent), then unread ones.
-        Future<List<TitleGroup>> getRecentGrouped() async {
-          final db = await _db;
-          final seriesRows = await db.rawQuery('''
+  /// Recent: all series that have at least one article, ordered by most-recently
+  /// read article first. Series with no read history appear at the end (sorted
+  /// by series creation date). Each series includes ALL its articles, with
+  /// read articles first (most recent), then unread ones.
+  Future<List<TitleGroup>> getRecentGrouped() async {
+    final db = await _db;
+    // Only series that have at least one actually-read article
+    // (read_history row) are part of the reading history. Cached
+    // articles that were merely prefetched in the background must NOT
+    // appear here — only opening on the reader screen registers history.
+    final seriesRows = await db.rawQuery('''
             SELECT s.id AS series_id, COALESCE(s.display_name, s.name) AS series_name, w.domain AS website_domain,
                    MAX(rh.read_at) AS last_read_at
             FROM series s
             JOIN websites w ON w.id = s.website_id
             JOIN articles a ON a.series_id = s.id
-            LEFT JOIN read_history rh ON rh.article_id = a.id
+            JOIN read_history rh ON rh.article_id = a.id
             GROUP BY s.id, s.name, w.domain
             ORDER BY last_read_at DESC, s.created_at DESC
           ''');
 
-          final groups = <TitleGroup>[];
-          for (final sr in seriesRows) {
-            final seriesId = sr['series_id'] as String;
-            final articleRows = await db.rawQuery(
-              '''
+    final groups = <TitleGroup>[];
+    for (final sr in seriesRows) {
+      final seriesId = sr['series_id'] as String;
+      // Only articles that were actually opened (have a read_history
+      // entry) belong in the reading history — never prefetched cache.
+      final articleRows = await db.rawQuery(
+        '''
               SELECT $_cols
               FROM articles a
-              LEFT JOIN read_history rh ON rh.article_id = a.id
+              JOIN read_history rh ON rh.article_id = a.id
               LEFT JOIN bookmarks b ON b.article_id = a.id
               WHERE a.series_id = ?
               ORDER BY rh.read_at DESC, a.created_at DESC
             ''',
-              [seriesId],
-            );
-            groups.add(
-              TitleGroup(
-                titleId: seriesId,
-                titleName: sr['series_name'] as String,
-                websiteDomain: sr['website_domain'] as String,
-                articles: articleRows.map(Article.fromMap).toList(),
-              ),
-            );
-          }
-          return groups;
-        }
+        [seriesId],
+      );
+      groups.add(
+        TitleGroup(
+          titleId: seriesId,
+          titleName: sr['series_name'] as String,
+          websiteDomain: sr['website_domain'] as String,
+          articles: articleRows.map(Article.fromMap).toList(),
+        ),
+      );
+    }
+    return groups;
+  }
 
-        /// Bookmarked articles grouped by series, ordered by most-recently-bookmarked first.
-        Future<List<TitleGroup>> getBookmarksGrouped() async {
-          final db = await _db;
-          final seriesRows = await db.rawQuery('''
+  /// Bookmarked articles grouped by series, ordered by most-recently-bookmarked first.
+  Future<List<TitleGroup>> getBookmarksGrouped() async {
+    final db = await _db;
+    final seriesRows = await db.rawQuery('''
             SELECT s.id AS series_id, COALESCE(s.display_name, s.name) AS series_name, w.domain AS website_domain,
                    MAX(bk.bookmarked_at) AS last_bookmarked_at
             FROM series s
@@ -347,11 +354,11 @@ class LocalArticleSource {
             ORDER BY last_bookmarked_at DESC
           ''');
 
-          final groups = <TitleGroup>[];
-          for (final sr in seriesRows) {
-            final seriesId = sr['series_id'] as String;
-            final articleRows = await db.rawQuery(
-              '''
+    final groups = <TitleGroup>[];
+    for (final sr in seriesRows) {
+      final seriesId = sr['series_id'] as String;
+      final articleRows = await db.rawQuery(
+        '''
               SELECT $_cols
               FROM bookmarks bk
               JOIN articles a ON a.id = bk.article_id
@@ -359,119 +366,119 @@ class LocalArticleSource {
               WHERE a.series_id = ?
               ORDER BY bk.bookmarked_at DESC
             ''',
-              [seriesId],
-            );
-            groups.add(
-              TitleGroup(
-                titleId: seriesId,
-                titleName: sr['series_name'] as String,
-                websiteDomain: sr['website_domain'] as String,
-                articles: articleRows.map(Article.fromMap).toList(),
-              ),
-            );
-          }
-          return groups;
-        }
+        [seriesId],
+      );
+      groups.add(
+        TitleGroup(
+          titleId: seriesId,
+          titleName: sr['series_name'] as String,
+          websiteDomain: sr['website_domain'] as String,
+          articles: articleRows.map(Article.fromMap).toList(),
+        ),
+      );
+    }
+    return groups;
+  }
 
-        // ─── Series management ───────────────────────────────────────────────────
+  // ─── Series management ───────────────────────────────────────────────────
 
-        Future<void> updateSeriesName(String seriesId, String name) async {
-          final db = await _db;
-          await db.update(
-            'series',
-            {'display_name': name},
-            where: 'id = ?',
-            whereArgs: [seriesId],
-          );
-        }
+  Future<void> updateSeriesName(String seriesId, String name) async {
+    final db = await _db;
+    await db.update(
+      'series',
+      {'display_name': name},
+      where: 'id = ?',
+      whereArgs: [seriesId],
+    );
+  }
 
-        /// Remove all read_history rows for articles belonging to [seriesId].
-        /// Also removes the articles from cache if they're not bookmarked.
-        Future<void> removeHistoryForSeries(String seriesId) async {
-          final db = await _db;
+  /// Remove all read_history rows for articles belonging to [seriesId].
+  /// Also removes the articles from cache if they're not bookmarked.
+  Future<void> removeHistoryForSeries(String seriesId) async {
+    final db = await _db;
 
-          // First, get all article IDs for this series
-          final articleRows = await db.query(
-            'articles',
-            columns: ['id'],
-            where: 'series_id = ?',
-            whereArgs: [seriesId],
-          );
-          final articleIds = articleRows.map((r) => r['id'] as String).toList();
+    // First, get all article IDs for this series
+    final articleRows = await db.query(
+      'articles',
+      columns: ['id'],
+      where: 'series_id = ?',
+      whereArgs: [seriesId],
+    );
+    final articleIds = articleRows.map((r) => r['id'] as String).toList();
 
-          // Delete from read_history (set article_id to null, keep entries)
-          await db.rawUpdate(
-            '''
+    // Delete from read_history (set article_id to null, keep entries)
+    await db.rawUpdate(
+      '''
             UPDATE read_history
             SET article_id = NULL
             WHERE article_id IN (SELECT id FROM articles WHERE series_id = ?)
             ''',
-            [seriesId],
-          );
+      [seriesId],
+    );
 
-          // Delete articles from cache if they're not bookmarked
-          if (articleIds.isNotEmpty) {
-            await db.rawDelete(
-              '''
+    // Delete articles from cache if they're not bookmarked
+    if (articleIds.isNotEmpty) {
+      await db.rawDelete(
+        '''
               DELETE FROM articles
               WHERE series_id = ?
               AND id NOT IN (SELECT article_id FROM bookmarks WHERE article_id IS NOT NULL)
               ''',
-              [seriesId],
-            );
-          }
+        [seriesId],
+      );
+    }
 
-          // Clean up orphaned reading_states
-          if (articleIds.isNotEmpty) {
-            await db.rawDelete(
-              'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE series_id = ?)',
-              [seriesId],
-            );
-          }
-        }
+    // Clean up orphaned reading_states
+    if (articleIds.isNotEmpty) {
+      await db.rawDelete(
+        'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE series_id = ?)',
+        [seriesId],
+      );
+    }
+  }
 
-        /// Remove all bookmark rows for articles belonging to [seriesId].
-        /// Also removes the articles from cache if they're not in read history.
-        Future<void> removeBookmarksForSeries(String seriesId) async {
-          final db = await _db;
+  /// Remove all bookmark rows for articles belonging to [seriesId].
+  /// Also removes the articles from cache if they're not in read history.
+  Future<void> removeBookmarksForSeries(String seriesId) async {
+    final db = await _db;
 
-          // First, get all article IDs for this series
-          final articleRows = await db.query(
-            'articles',
-            columns: ['id'],
-            where: 'series_id = ?',
-            whereArgs: [seriesId],
-          );
-          final articleIds = articleRows.map((r) => r['id'] as String).toList();
+    // First, get all article IDs for this series
+    final articleRows = await db.query(
+      'articles',
+      columns: ['id'],
+      where: 'series_id = ?',
+      whereArgs: [seriesId],
+    );
+    final articleIds = articleRows.map((r) => r['id'] as String).toList();
 
-          // Delete from bookmarks (set article_id to null, keep entries)
-          await db.rawUpdate(
-            '''
+    // Delete from bookmarks (set article_id to null, keep entries)
+    await db.rawUpdate(
+      '''
             UPDATE bookmarks
             SET article_id = NULL
             WHERE article_id IN (SELECT id FROM articles WHERE series_id = ?)
             ''',
-            [seriesId],
-          );
+      [seriesId],
+    );
 
-          // Delete articles from cache if they're not in read history
-          if (articleIds.isNotEmpty) {
-            await db.rawDelete(
-              '''
+    // Delete articles from cache if they're not in read history
+    if (articleIds.isNotEmpty) {
+      await db.rawDelete(
+        '''
               DELETE FROM articles
               WHERE series_id = ?
               AND id NOT IN (SELECT article_id FROM read_history WHERE article_id IS NOT NULL)
               ''',
-              [seriesId],
-            );
-          }
+        [seriesId],
+      );
+    }
 
-          // Clean up orphaned reading_states
-          if (articleIds.isNotEmpty) {
-            await db.rawDelete(
-              'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE series_id = ?)',
-              [seriesId],
-            );
-          }
-        }
+    // Clean up orphaned reading_states
+    if (articleIds.isNotEmpty) {
+      await db.rawDelete(
+        'DELETE FROM reading_states WHERE article_id IN (SELECT id FROM articles WHERE series_id = ?)',
+        [seriesId],
+      );
+    }
+  }
 }
